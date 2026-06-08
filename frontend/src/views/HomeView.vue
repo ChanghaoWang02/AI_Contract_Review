@@ -124,6 +124,8 @@ const onSelectContract = async (id: number) => {
       // 使用服务器返回的真实 review_id（此前因 Bug 硬编码为 0，现已修复）
       const reviewId = result.id
       activeReviewId.value = reviewId
+      // 立即更新侧边栏审核状态标签
+      contractStore.markReviewed(id)
       if (result.findings) {
         showReport.value = true
         // 在聊天中注入审核摘要，让用户一眼看到结果

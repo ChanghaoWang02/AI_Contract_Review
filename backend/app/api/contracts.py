@@ -7,8 +7,9 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.session import get_db
-from app.models import Contract
-from app.schemas import ContractOut, ContractDetail
+from sqlalchemy import func
+from app.models import Contract, Review
+from app.schemas import ContractOut, ContractDetail, SaveDraftRequest
 from app.core.parser import ContractParser
 from app.core.chunker import ContractChunker
 
@@ -80,7 +81,7 @@ async def list_contracts(
     limit: int = 20,
     db: Session = Depends(get_db),
 ):
-    """获取合同列表"""
+    """获取合同列表（含审核状态）"""
     contracts = (
         db.query(Contract)
         .order_by(Contract.created_at.desc())
@@ -88,6 +89,20 @@ async def list_contracts(
         .limit(limit)
         .all()
     )
+
+    # 批量获取 review_count，避免 N+1
+    if contracts:
+        contract_ids = [c.id for c in contracts]
+        rows = (
+            db.query(Review.contract_id, func.count(Review.id))
+            .filter(Review.contract_id.in_(contract_ids))
+            .group_by(Review.contract_id)
+            .all()
+        )
+        counts = {row[0]: row[1] for row in rows}
+        for c in contracts:
+            c.review_count = counts.get(c.id, 0)
+
     return contracts
 
 
@@ -110,3 +125,26 @@ async def delete_contract(contract_id: int, db: Session = Depends(get_db)):
     db.commit()
     logger.info("合同已删除 | id=%d | file=%s", contract_id, contract.original_filename or contract.filename)
     return {"message": "合同已删除。", "id": contract_id}
+
+
+@router.post("/save-draft", response_model=ContractOut)
+async def save_contract_from_draft(
+    body: SaveDraftRequest,
+    db: Session = Depends(get_db),
+):
+    """从起草页保存合同（JSON body）"""
+    content_bytes = body.content.encode("utf-8")
+    contract = Contract(
+        filename=body.filename,
+        original_filename=body.filename,
+        content=body.content,
+        content_type=body.content_type,
+        source="draft",
+        file_size=len(content_bytes),
+        clause_count=0,
+    )
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    logger.info("合同已保存 | id=%d | filename=%s | 大小=%d chars", contract.id, body.filename, len(body.content))
+    return contract

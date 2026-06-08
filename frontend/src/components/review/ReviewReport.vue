@@ -45,7 +45,7 @@
         <template #icon>
           <n-icon><download-outline /></n-icon>
         </template>
-        导出 PDF
+        导出审核报告
       </n-button>
     </div>
   </div>

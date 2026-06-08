@@ -43,3 +43,32 @@ def get_db():
 def init_db():
     """初始化数据库表"""
     Base.metadata.create_all(bind=engine)
+    _migrate_columns()
+
+
+def _migrate_columns():
+    """对已有表补充新列（幂等：列已存在则跳过）。"""
+    migrations = [
+        ("contracts", "source", "NVARCHAR(20) DEFAULT 'upload'"),
+    ]
+
+    try:
+        with engine.connect() as conn:
+            for table, col, col_spec in migrations:
+                try:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD {col} {col_spec}")
+                    conn.commit()
+                    logger.info("DB 迁移: %s ADD %s %s", table, col, col_spec)
+                except Exception:
+                    conn.rollback()
+                # 回填已有行的 NULL 值
+                try:
+                    conn.exec_driver_sql(
+                        f"UPDATE {table} SET {col} = 'upload' WHERE {col} IS NULL"
+                    )
+                    conn.commit()
+                    logger.info("DB 回填: %s SET %s = 'upload' WHERE NULL", table, col)
+                except Exception:
+                    conn.rollback()
+    except Exception as e:
+        logger.debug("DB 迁移跳过（可能未就绪）: %s", e)

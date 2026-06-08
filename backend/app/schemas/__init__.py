@@ -1,6 +1,6 @@
 """Pydantic 请求/响应模型"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -11,11 +11,18 @@ class ContractOut(BaseModel):
     id: int
     original_filename: str
     content_type: str
+    source: str = "upload"
     file_size: int
     clause_count: int
+    review_count: int = 0
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def default_source(cls, v):
+        return v if v else "upload"
 
 
 class ContractDetail(ContractOut):
@@ -120,3 +127,26 @@ class RuleOut(RuleCreate):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ─── 合同起草 ───
+
+class DraftGenerateRequest(BaseModel):
+    contract_type: str                                   # e.g. "房屋租赁合同" or "自定义"
+    form_data: dict = {}                                 # key-value pairs from Step 2
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+class DraftChatRequest(BaseModel):
+    anchored_clause: str                                 # full text of the anchored clause
+    clause_titles: list[str] = []                        # all clause titles for context
+    instruction: str                                     # user's editing instruction
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+class SaveDraftRequest(BaseModel):
+    filename: str
+    content: str
+    content_type: str = "txt"

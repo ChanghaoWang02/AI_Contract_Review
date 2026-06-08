@@ -21,6 +21,7 @@ class Contract(Base):
     original_filename = Column(NVARCHAR(255), nullable=False)
     content = Column(Text, nullable=False)
     content_type = Column(NVARCHAR(20), nullable=False)  # pdf / docx / txt
+    source = Column(NVARCHAR(20), default="upload")        # upload / draft
     file_size = Column(Integer, nullable=False)
     clause_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)

@@ -1,7 +1,7 @@
 <template>
   <nav class="sidebar">
     <div class="sidebar-header">
-      <h2 class="logo">ATCR</h2>
+      <h2 class="logo">AI CONTRACT REVIEW</h2>
       <span class="subtitle">AI 合同审核</span>
     </div>
 
@@ -31,7 +31,12 @@
           :class="{ active: c.id === activeId }"
           @click="$emit('select', c.id)"
         >
-          <div class="contract-name">{{ c.original_filename }}</div>
+          <div class="contract-name">
+            {{ c.original_filename }}
+            <n-tag :type="c.review_count > 0 ? 'success' : 'default'" size="tiny" :bordered="false" class="review-tag">
+              {{ c.review_count > 0 ? '已审核' : '待审核' }}
+            </n-tag>
+          </div>
           <div class="contract-meta">
             {{ formatDate(c.created_at) }}
             <span class="clause-count" v-if="c.clause_count">
@@ -61,6 +66,11 @@
     </div>
 
     <div class="sidebar-footer">
+      <div class="nav-section" style="margin-bottom: 8px">
+        <router-link to="/draft" class="nav-link draft-link">
+          <n-icon><create-outline /></n-icon> 起草合同
+        </router-link>
+      </div>
       <router-link to="/rules" class="nav-link">
         <n-icon><settings-outline /></n-icon> 审核规则
       </router-link>
@@ -70,8 +80,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NButton, NIcon, NScrollbar } from 'naive-ui'
-import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline } from '@vicons/ionicons5'
+import { NButton, NIcon, NScrollbar, NTag } from 'naive-ui'
+import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline } from '@vicons/ionicons5'
 import { useExportPDF } from '@/composables/useExportPDF'
 import { useReviewStore } from '@/stores/review'
 import type { Contract } from '@/stores/contract'
@@ -167,6 +177,12 @@ function formatDate(dateStr: string): string {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding-right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-tag {
+  flex-shrink: 0;
 }
 .contract-meta {
   font-size: 12px;
@@ -218,5 +234,12 @@ function formatDate(dateStr: string): string {
 }
 .nav-link:hover {
   background: #f5f5f5;
+}
+.draft-link {
+  color: #4C6EF5;
+  font-weight: 500;
+}
+.draft-link:hover {
+  background: #e8ebff;
 }
 </style>

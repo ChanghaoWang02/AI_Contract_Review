@@ -5,8 +5,10 @@ export interface Contract {
   id: number
   original_filename: string
   content_type: string
+  source: string
   file_size: number
   clause_count: number
+  review_count: number
   created_at: string
 }
 
@@ -62,6 +64,13 @@ export const useContractStore = defineStore('contract', () => {
     }
   }
 
+  function markReviewed(contractId: number) {
+    const c = contracts.value.find((c) => c.id === contractId)
+    if (c) {
+      c.review_count = Math.max(c.review_count, 1)
+    }
+  }
+
   async function deleteContract(id: number) {
     const res = await fetch(`/api/contracts/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error('删除失败')
@@ -78,6 +87,7 @@ export const useContractStore = defineStore('contract', () => {
     fetchContracts,
     fetchContract,
     uploadContract,
+    markReviewed,
     deleteContract,
   }
 })
