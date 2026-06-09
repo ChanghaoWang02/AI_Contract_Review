@@ -132,7 +132,7 @@ POST /api/contracts/{id}/compare
 
 ```
 HomeView
-  ├── UploadDialog (新增视角选择：甲方/乙方/中立 radio group)
+  ├── CompareUploadDialog (文件选择 + 视角选择：甲方/乙方/中立 radio group)
   └── CompareModal (n-modal, fullscreen)
         ├── ComparePanel ×2 (左：原版，右：新版)
         │     └── 条款行 + 高亮背景色
@@ -147,7 +147,7 @@ HomeView
 
 | 交互 | 行为 |
 |------|------|
-| 点击合同面板 [📄 对比] | 弹出上传对话框（含视角选择 radio group） |
+| 点击合同面板 [📄 对比] | 弹出 `CompareUploadDialog`（文件选择 + 视角 radio group） |
 | 选择文件 + 视角 → 确定 | 开始上传 + SSE 连接，全屏弹窗打开 |
 | 上传阶段 | 弹窗显示上传进度条 |
 | 解析/匹配阶段 | 弹窗显示旋转 loading + 阶段文字（progress 事件驱动） |
@@ -166,6 +166,16 @@ HomeView
 | `modified + neutral` | `#fffff0` 浅黄 | 中性变更 |
 | `added` | `#f0f4ff` 浅蓝 | 新增条款 |
 | `deleted` | `#f5f5f5` 浅灰 | 已删除条款 |
+
+### 6.4 新增文件
+
+| 文件 | 职责 |
+|------|------|
+| `components/contract/CompareUploadDialog.vue` | 文件选择 + 视角 radio group + 确定/取消 |
+| `components/compare/CompareModal.vue` | 全屏弹窗容器，SSE 连接管理 |
+| `components/compare/ComparePanel.vue` | 单侧合同原文，条款高亮渲染 |
+| `components/compare/ChangeList.vue` | 变更摘要列表，风险标签 |
+| `components/compare/CompareSummary.vue` | 底部固定汇总栏 |
 
 ## 7. 后端实现要点
 
