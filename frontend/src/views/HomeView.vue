@@ -16,7 +16,9 @@
       <ChatPanel
         :review-id="activeReviewId"
         :review-status="reviewStore.currentReview?.status"
+        :contract-collapsed="!showContractPanel"
         @send="onSendMessage"
+        @expand-contract="showContractPanel = true"
       />
 
       <!-- 合同面板 (可收起) -->

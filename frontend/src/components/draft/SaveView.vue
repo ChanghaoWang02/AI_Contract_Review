@@ -12,6 +12,7 @@
         <n-form-item label="文件格式">
           <n-radio-group v-model:value="fileFormat" :disabled="saving">
             <n-radio value="txt">TXT — 纯文本（可用记事本打开）</n-radio>
+            <n-radio value="docx">DOCX — Word 文档（适合编辑排版）</n-radio>
             <n-radio value="pdf">PDF — 排版文档（适合打印签署）</n-radio>
           </n-radio-group>
         </n-form-item>
@@ -69,7 +70,7 @@ const message = useMessage()
 const draft = useDraftStore()
 
 const filename = ref('')
-const fileFormat = ref<'txt' | 'pdf'>('txt')
+const fileFormat = ref<'txt' | 'docx' | 'pdf'>('txt')
 const saving = ref(false)
 const saveMode = ref<'only' | 'review'>('only')
 const saveError = ref('')
@@ -94,16 +95,17 @@ function triggerDownload(blob: Blob, name: string) {
 }
 
 async function downloadFile(): Promise<boolean> {
-  const finalName = fileFormat.value === 'pdf'
-    ? (filename.value.endsWith('.pdf') ? filename.value : `${filename.value}.pdf`)
-    : (filename.value.endsWith('.txt') ? filename.value : `${filename.value}.txt`)
+  const ext = fileFormat.value === 'pdf' ? '.pdf' : fileFormat.value === 'docx' ? '.docx' : '.txt'
+  const finalName = filename.value.endsWith(ext) ? filename.value : `${filename.value}${ext}`
 
+  // TXT 客户端直接下载，无需后端
   if (fileFormat.value === 'txt') {
     const blob = new Blob([draft.generatedText], { type: 'text/plain; charset=utf-8' })
     triggerDownload(blob, finalName)
     return true
   }
 
+  // DOCX / PDF 走后端渲染
   try {
     const res = await fetch('/api/draft/export', {
       method: 'POST',
@@ -111,7 +113,7 @@ async function downloadFile(): Promise<boolean> {
       body: JSON.stringify({
         content: draft.generatedText,
         filename: finalName,
-        format: 'pdf',
+        format: fileFormat.value,
       }),
     })
 
@@ -121,11 +123,12 @@ async function downloadFile(): Promise<boolean> {
     triggerDownload(blob, finalName)
     return true
   } catch (e: any) {
-    console.error('PDF export failed:', e)
-    const fallbackName = finalName.replace('.pdf', '.txt')
+    console.error(`${fileFormat.value.toUpperCase()} export failed:`, e)
+    // 降级为 TXT
+    const fallbackName = finalName.replace(ext, '.txt')
     const blob = new Blob([draft.generatedText], { type: 'text/plain; charset=utf-8' })
     triggerDownload(blob, fallbackName)
-    message.warning('PDF 生成失败，已下载 TXT 格式')
+    message.warning(`${fileFormat.value.toUpperCase()} 生成失败，已下载 TXT 格式`)
     return false
   }
 }

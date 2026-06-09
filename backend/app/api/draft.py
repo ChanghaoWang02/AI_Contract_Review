@@ -280,15 +280,36 @@ def _render_contract_pdf(content: str, title: str) -> bytes:
 
 @router.post("/export")
 async def draft_export(body: dict):
-    """导出合同为 PDF 或 TXT 供浏览器下载"""
+    """导出合同为 DOCX / PDF / TXT 供浏览器下载"""
     content = body.get("content", "")
     filename = body.get("filename", "合同")
     fmt = body.get("format", "txt")
 
-    if fmt == "pdf":
+    if fmt == "docx":
+        from app.core.docx_renderer import render_contract_docx
+
         title = filename
-        if title.endswith(".txt") or title.endswith(".pdf"):
-            title = title.rsplit(".", 1)[0]
+        for ext in (".txt", ".pdf", ".docx"):
+            if title.endswith(ext):
+                title = title.rsplit(".", 1)[0]
+                break
+        docx_bytes = render_contract_docx(content, title)
+
+        safe_name = filename if filename.endswith(".docx") else f"{filename}.docx"
+        from urllib.parse import quote
+        disposition = f"attachment; filename*=UTF-8''{quote(safe_name)}"
+
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": disposition},
+        )
+    elif fmt == "pdf":
+        title = filename
+        for ext in (".txt", ".pdf", ".docx"):
+            if title.endswith(ext):
+                title = title.rsplit(".", 1)[0]
+                break
         pdf_bytes = _render_contract_pdf(content, title)
 
         safe_name = filename if filename.endswith(".pdf") else f"{filename}.pdf"

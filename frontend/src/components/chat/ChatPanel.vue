@@ -19,6 +19,15 @@
         <n-tag v-if="chat.isStreaming" type="info" size="small">
           <span class="pulsing-dot" /> AI 回复中
         </n-tag>
+        <n-button
+          v-if="contractCollapsed"
+          size="tiny"
+          circle
+          quaternary
+          @click="$emit('expandContract')"
+        >
+          <n-icon size="16"><chevron-back-outline /></n-icon>
+        </n-button>
       </div>
     </div>
 
@@ -83,7 +92,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { NIcon, NTag, NButton, NAlert } from 'naive-ui'
-import { ChatbubblesOutline } from '@vicons/ionicons5'
+import { ChatbubblesOutline, ChevronBackOutline } from '@vicons/ionicons5'
 import { useChatStore } from '@/stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import ChatInput from './ChatInput.vue'
@@ -91,10 +100,12 @@ import ChatInput from './ChatInput.vue'
 const props = defineProps<{
   reviewId: number | null
   reviewStatus?: string
+  contractCollapsed?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [content: string]
+  expandContract: []
 }>()
 
 const chat = useChatStore()
