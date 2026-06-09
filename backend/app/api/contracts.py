@@ -3,7 +3,8 @@
 import logging
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.session import get_db
@@ -12,6 +13,7 @@ from app.models import Contract, Review
 from app.schemas import ContractOut, ContractDetail, SaveDraftRequest
 from app.core.parser import ContractParser
 from app.core.chunker import ContractChunker
+from app.core import contract_compare
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -140,6 +142,83 @@ async def delete_contract(contract_id: int, db: Session = Depends(get_db)):
     db.commit()
     logger.info("合同已删除 | id=%d | file=%s", contract_id, contract.original_filename or contract.filename)
     return {"message": "合同已删除。", "id": contract_id}
+
+
+@router.post("/{contract_id}/compare")
+async def compare_contract(
+    contract_id: int,
+    file: UploadFile = File(...),
+    perspective: str = Form("neutral"),
+    provider: str = Form(None),
+    model: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    """SSE 流式对比审核：上传新版合同 → 条款匹配 → AI 逐条分析变更"""
+    settings = get_settings()
+
+    # 验证原合同存在
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(404, "合同不存在。")
+    if not contract.content:
+        raise HTTPException(400, "原合同内容为空，无法对比。")
+
+    # 校验文件类型
+    if not file.filename:
+        raise HTTPException(400, "文件名不能为空。")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in settings.allowed_extensions:
+        raise HTTPException(
+            400,
+            f"不支持的文件格式: .{ext}。支持: {settings.allowed_extensions}",
+        )
+
+    # 校验文件大小
+    file_bytes = await file.read()
+    size_mb = len(file_bytes) / (1024 * 1024)
+    if size_mb > settings.max_upload_size_mb:
+        raise HTTPException(
+            400,
+            f"文件过大 ({size_mb:.1f}MB)。最大: {settings.max_upload_size_mb}MB",
+        )
+
+    # 解析上传文件
+    try:
+        result = ContractParser.parse(file_bytes, ext)
+    except Exception as e:
+        raise HTTPException(400, f"文件解析失败: {str(e)}")
+
+    if not result.text.strip():
+        raise HTTPException(400, "新版合同内容为空，无法对比。")
+
+    # 切分原合同条款
+    original_clauses = ContractChunker.split(contract.content)
+
+    # 清理 provider 和 model 的 None 值
+    prov = provider if provider and provider.lower() != "none" else None
+    mdl = model if model and model.lower() != "none" else ""
+
+    logger.info(
+        "合同对比开始 | contract_id=%d | file=%s | perspective=%s",
+        contract_id, file.filename, perspective,
+    )
+
+    async def event_generator():
+        try:
+            async for sse_chunk in contract_compare.compare_stream(
+                original_clauses, result.text, perspective, prov, mdl,
+            ):
+                yield sse_chunk
+        except GeneratorExit:
+            logger.info("合同对比 SSE 连接断开 | contract_id=%d", contract_id)
+        except Exception as e:
+            logger.error("合同对比异常 | %s: %s", type(e).__name__, e)
+            safe_msg = contract_compare._sanitize_sse(
+                {"event": "error", "data": {"message": str(e)}}
+            )
+            yield f"data: {safe_msg}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/save-draft", response_model=ContractOut)

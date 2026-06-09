@@ -29,6 +29,7 @@
           :findings="reviewStore.currentReview?.findings"
           @clause-click="onClauseClick"
           @close="showContractPanel = false"
+          @compare="onCompareClick"
         />
       </transition>
     </div>
@@ -45,7 +46,6 @@
         <n-spin size="large" />
         <h3>AI 正在审核合同...</h3>
         <p>正在逐条分析条款风险，请稍候</p>
-        <n-progress type="line" :percentage="100" :indicator-placement="'inside'" processing />
       </div>
     </n-modal>
 
@@ -63,13 +63,27 @@
         <p>正在加载审核结果...</p>
       </div>
     </n-modal>
+
+    <!-- 对比上传弹窗 -->
+    <CompareUploadDialog
+      v-model:show="showCompareUpload"
+      @confirm="onCompareConfirm"
+    />
+
+    <!-- 对比全屏弹窗 -->
+    <CompareModal
+      ref="compareModalRef"
+      :show="showCompare"
+      :contract="contractStore.currentContract"
+      @update:show="showCompare = $event"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NModal, NSpin, NProgress, useMessage, useDialog } from 'naive-ui'
+import { NModal, NSpin, useMessage, useDialog } from 'naive-ui'
 import { useContractStore } from '@/stores/contract'
 import { useReviewStore } from '@/stores/review'
 import { useChatStore } from '@/stores/chat'
@@ -77,6 +91,8 @@ import Sidebar from '@/components/layout/Sidebar.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
 import ContractViewer from '@/components/contract/ContractViewer.vue'
 import UploadDialog from '@/components/contract/UploadDialog.vue'
+import CompareUploadDialog from '@/components/contract/CompareUploadDialog.vue'
+import CompareModal from '@/components/compare/CompareModal.vue'
 import ReviewReport from '@/components/review/ReviewReport.vue'
 
 const message = useMessage()
@@ -91,8 +107,11 @@ const showUpload = ref(false)
 const showContractPanel = ref(true)
 const showReport = ref(false)
 const reviewCreating = ref(false)
+const showCompareUpload = ref(false)
+const showCompare = ref(false)
 const activeContractId = ref<number | null>(null)
 const activeReviewId = ref<number | null>(null)
+const compareModalRef = ref<InstanceType<typeof CompareModal> | null>(null)
 
 onMounted(async () => {
   await contractStore.fetchContracts()
@@ -221,6 +240,19 @@ const onSendMessage = async (content: string) => {
 const onClauseClick = (clauseId: string, clauseText: string) => {
   chatStore.setAnchor(clauseId, clauseText)
 }
+
+const onCompareClick = () => {
+  showCompareUpload.value = true
+}
+
+const onCompareConfirm = (file: File, perspective: string) => {
+  showCompareUpload.value = false
+  showCompare.value = true
+  // CompareModal will open and start the SSE connection
+  setTimeout(() => {
+    compareModalRef.value?.startCompare(file, perspective)
+  }, 100)
+}
 </script>
 
 <style scoped>
@@ -262,4 +294,5 @@ const onClauseClick = (clauseId: string, clauseText: string) => {
   color: #999;
   font-size: 14px;
 }
+
 </style>

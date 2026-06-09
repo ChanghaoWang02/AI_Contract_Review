@@ -10,7 +10,8 @@ from app.db.session import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    # SQL Server 不保留时区信息，使用本地时间避免前后端时间不一致
+    return datetime.now()
 
 
 class Contract(Base):

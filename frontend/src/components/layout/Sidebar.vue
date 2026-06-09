@@ -31,8 +31,12 @@
           :class="{ active: c.id === activeId }"
           @click="$emit('select', c.id)"
         >
-          <div class="contract-name">
-            {{ c.original_filename }}
+          <div class="contract-name">{{ c.original_filename }}</div>
+          <div class="contract-meta">
+            {{ formatDate(c.created_at) }}
+            <span class="clause-count" v-if="c.clause_count">
+              · {{ c.clause_count }}条
+            </span>
             <n-tag v-if="c.review_status === 'completed'" type="success" size="tiny" :bordered="false" class="review-tag">
               已审核
             </n-tag>
@@ -45,12 +49,6 @@
             <n-tag v-else type="default" size="tiny" :bordered="false" class="review-tag">
               待审核
             </n-tag>
-          </div>
-          <div class="contract-meta">
-            {{ formatDate(c.created_at) }}
-            <span class="clause-count" v-if="c.clause_count">
-              · {{ c.clause_count }}条
-            </span>
           </div>
           <n-button
             text
@@ -185,18 +183,19 @@ function formatDate(dateStr: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 24px;
+  padding-right: 50px;
+}
+.contract-meta {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .review-tag {
   flex-shrink: 0;
-}
-.contract-meta {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
+  margin-left: 2px;
 }
 
 .export-btn {

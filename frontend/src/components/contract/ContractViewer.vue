@@ -5,9 +5,14 @@
         <n-icon><document-text-outline /></n-icon>
         <span>合同原文</span>
       </div>
-      <n-button text size="small" @click="$emit('close')">
-        <n-icon><chevron-forward-outline /></n-icon>
-      </n-button>
+      <div class="header-actions">
+        <n-button text size="small" @click="$emit('compare')" title="对比合同">
+          <n-icon><git-compare-outline /></n-icon>
+        </n-button>
+        <n-button text size="small" @click="$emit('close')">
+          <n-icon><chevron-forward-outline /></n-icon>
+        </n-button>
+      </div>
     </div>
 
     <div class="panel-body" v-if="contract">
@@ -61,7 +66,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NIcon, NButton, NDivider, NScrollbar } from 'naive-ui'
-import { DocumentTextOutline, ChevronForwardOutline } from '@vicons/ionicons5'
+import { DocumentTextOutline, ChevronForwardOutline, GitCompareOutline } from '@vicons/ionicons5'
 import { ContractChunkerClient } from '@/core/chunker'
 import RiskBadge from '@/components/review/RiskBadge.vue'
 import type { ContractDetail } from '@/stores/contract'
@@ -75,6 +80,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   clauseClick: [clauseId: string, clauseText: string]
+  compare: []
 }>()
 
 const highlightedClause = ref<string | null>(null)
@@ -125,6 +131,12 @@ function formatSize(bytes: number): string {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #eee;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .header-title {
