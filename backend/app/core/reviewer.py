@@ -534,9 +534,12 @@ class ReviewEngine:
 
 def _normalize_clause(c: dict) -> dict:
     """规范化单个条款的字段名，兼容不同 LLM 的输出格式"""
-    # ID
+    # ID — 兜底补全 + 强制转字符串，兼容 LLM 返回整数 id
     if "id" not in c:
         c["id"] = c.get("clause") or c.get("clause_ref") or c.get("clause_id") or f"clause_{hash(str(c))}"
+    c["id"] = str(c["id"])
+    if c["id"].isdigit():
+        c["id"] = f"clause_{c['id']}"
     # 原文
     if "original_text" not in c:
         c["original_text"] = c.get("clause_text") or c.get("original_text") or c.get("content") or ""

@@ -62,6 +62,11 @@ class ClauseResult(BaseModel):
     suggestions: list[str] = []
     revised_text: Optional[str] = None
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id_to_str(cls, v):
+        return str(v) if v is not None else ""
+
 
 class FindingsOutput(BaseModel):
     clauses: list[ClauseResult] = []
