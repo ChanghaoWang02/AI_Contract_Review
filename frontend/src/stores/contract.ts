@@ -9,6 +9,7 @@ export interface Contract {
   file_size: number
   clause_count: number
   review_count: number
+  review_status: string | null  // 'completed' | 'processing' | 'error' | null
   created_at: string
 }
 
@@ -68,6 +69,7 @@ export const useContractStore = defineStore('contract', () => {
     const c = contracts.value.find((c) => c.id === contractId)
     if (c) {
       c.review_count = Math.max(c.review_count, 1)
+      c.review_status = 'completed'
     }
   }
 

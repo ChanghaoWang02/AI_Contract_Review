@@ -33,8 +33,17 @@
         >
           <div class="contract-name">
             {{ c.original_filename }}
-            <n-tag :type="c.review_count > 0 ? 'success' : 'default'" size="tiny" :bordered="false" class="review-tag">
-              {{ c.review_count > 0 ? '已审核' : '待审核' }}
+            <n-tag v-if="c.review_status === 'completed'" type="success" size="tiny" :bordered="false" class="review-tag">
+              已审核
+            </n-tag>
+            <n-tag v-else-if="c.review_status === 'processing'" type="warning" size="tiny" :bordered="false" class="review-tag">
+              未完成
+            </n-tag>
+            <n-tag v-else-if="c.review_status === 'error'" type="error" size="tiny" :bordered="false" class="review-tag">
+              审核失败
+            </n-tag>
+            <n-tag v-else type="default" size="tiny" :bordered="false" class="review-tag">
+              待审核
             </n-tag>
           </div>
           <div class="contract-meta">

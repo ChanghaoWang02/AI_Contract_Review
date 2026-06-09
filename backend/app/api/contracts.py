@@ -90,18 +90,33 @@ async def list_contracts(
         .all()
     )
 
-    # 批量获取 review_count，避免 N+1
+    # 批量获取 review_count（仅计入已完成的审核）和最新审核状态
     if contracts:
         contract_ids = [c.id for c in contracts]
-        rows = (
+        # 仅统计 completed 的审核
+        count_rows = (
             db.query(Review.contract_id, func.count(Review.id))
-            .filter(Review.contract_id.in_(contract_ids))
+            .filter(Review.contract_id.in_(contract_ids), Review.status == "completed")
             .group_by(Review.contract_id)
             .all()
         )
-        counts = {row[0]: row[1] for row in rows}
+        counts = {row[0]: row[1] for row in count_rows}
+
+        # 获取每个合同的最新审核状态（用于侧边栏标签）
+        all_reviews = (
+            db.query(Review.contract_id, Review.status, Review.created_at)
+            .filter(Review.contract_id.in_(contract_ids))
+            .order_by(Review.contract_id, Review.created_at.desc())
+            .all()
+        )
+        statuses: dict[int, str] = {}
+        for cid, status, _ in all_reviews:
+            if cid not in statuses:
+                statuses[cid] = status
+
         for c in contracts:
             c.review_count = counts.get(c.id, 0)
+            c.review_status = statuses.get(c.id)
 
     return contracts
 

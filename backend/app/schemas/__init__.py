@@ -15,6 +15,7 @@ class ContractOut(BaseModel):
     file_size: int
     clause_count: int
     review_count: int = 0
+    review_status: Optional[str] = None  # 'completed' / 'processing' / 'error' / None (no review)
     created_at: datetime
 
     model_config = {"from_attributes": True}

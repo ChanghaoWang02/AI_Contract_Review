@@ -104,7 +104,7 @@ async def create_review(body: ReviewCreate, db: Session = Depends(get_db)):
         review.overall_score = int(findings.get("overall_score", 0))
         if result.get("parse_error"):
             review.status = "error"
-            review.summary = "AI 审核输出格式异常，无法解析为 JSON，请重试。"
+            review.summary = "审核结果解析失败，请重试（通常是 AI 输出因网络波动不完整，重试一般可解决）"
             logger.error(f"Review {review.id}: LLM JSON parse failed, raw output stored in findings_json")
         else:
             review.status = "completed"
@@ -180,7 +180,7 @@ async def create_review_stream(body: ReviewCreate, db: Session = Depends(get_db)
                     review.overall_score = int(findings.get("overall_score", 0))
                     if data.get("parse_error"):
                         review.status = "error"
-                        review.summary = "AI 输出格式异常，请重试"
+                        review.summary = "审核结果解析失败，请重试（通常是 AI 输出不完整，重试一般可解决）"
                     else:
                         review.status = "completed"
                         review.summary = findings.get("summary", "")
@@ -195,6 +195,14 @@ async def create_review_stream(body: ReviewCreate, db: Session = Depends(get_db)
                         db.rollback()
                     done_event = {"event": "done", "data": json.dumps(data, ensure_ascii=False)}
                     yield f"data: {_sse_encode(done_event)}\n\n"
+        except GeneratorExit:
+            # 客户端断开连接（关闭页面/刷新）→ 在 yield 点触发
+            review.status = "error"
+            review.summary = "审核中断：连接已断开，请重试。"
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
         except Exception as e:
             review.status = "error"
             review.summary = f"审核失败: {str(e)}"
@@ -203,6 +211,15 @@ async def create_review_stream(body: ReviewCreate, db: Session = Depends(get_db)
             except Exception:
                 db.rollback()
             yield f"data: {_sse_encode({'event': 'error', 'data': str(e)})}\n\n"
+        except BaseException:
+            # Python 3.9+：asyncio.CancelledError 继承自 BaseException 而非 Exception，
+            # 在 await 点被取消时到达此处。KeyboardInterrupt/SystemExit 已在上层被框架捕获。
+            review.status = "error"
+            review.summary = "审核中断：连接已断开，请重试。"
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
