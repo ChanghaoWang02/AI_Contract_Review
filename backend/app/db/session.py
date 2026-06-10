@@ -49,25 +49,46 @@ def init_db():
 def _migrate_columns():
     """对已有表补充新列（幂等：列已存在则跳过）。"""
     migrations = [
-        ("contracts", "source", "NVARCHAR(20) DEFAULT 'upload'"),
+        ("contracts", "source", "NVARCHAR(20) DEFAULT 'upload'", "'upload'"),
+        ("contracts", "parent_contract_id", "INTEGER NULL", None),
+        ("contracts", "source_lang", "NVARCHAR(10) NULL", None),
+        ("contracts", "target_lang", "NVARCHAR(10) NULL", None),
+    ]
+    # 外键迁移（与列迁移分开 — FK 需要单独处理，幂等）
+    fk_migrations = [
+        (
+            "contracts",
+            "FK_contracts_parent",
+            "FOREIGN KEY (parent_contract_id) REFERENCES contracts(id) ON DELETE CASCADE",
+        ),
     ]
 
     try:
         with engine.connect() as conn:
-            for table, col, col_spec in migrations:
+            for table, col, col_spec, backfill in migrations:
                 try:
                     conn.exec_driver_sql(f"ALTER TABLE {table} ADD {col} {col_spec}")
                     conn.commit()
                     logger.info("DB 迁移: %s ADD %s %s", table, col, col_spec)
                 except Exception:
                     conn.rollback()
-                # 回填已有行的 NULL 值
+                # 回填已有行的 NULL 值（仅当指定了回填值时）
+                if backfill is not None:
+                    try:
+                        conn.exec_driver_sql(
+                            f"UPDATE {table} SET {col} = {backfill} WHERE {col} IS NULL"
+                        )
+                        conn.commit()
+                        logger.info("DB 回填: %s SET %s = %s WHERE NULL", table, col, backfill)
+                    except Exception:
+                        conn.rollback()
+            for table, fk_name, fk_def in fk_migrations:
                 try:
                     conn.exec_driver_sql(
-                        f"UPDATE {table} SET {col} = 'upload' WHERE {col} IS NULL"
+                        f"ALTER TABLE {table} ADD CONSTRAINT {fk_name} {fk_def}"
                     )
                     conn.commit()
-                    logger.info("DB 回填: %s SET %s = 'upload' WHERE NULL", table, col)
+                    logger.info("DB FK 迁移: %s ADD %s", table, fk_name)
                 except Exception:
                     conn.rollback()
     except Exception as e:
