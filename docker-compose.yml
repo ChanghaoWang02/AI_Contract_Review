@@ -12,7 +12,7 @@ services:
       - DB_PORT=1433
       - DB_NAME=ATCR
       - DB_USER=sa
-      - DB_PASSWORD=${DB_PASSWORD:-YourPass123!}
+      - DB_PASSWORD=${DB_PASSWORD:?err}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
@@ -28,14 +28,14 @@ services:
     container_name: atcr-sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${DB_PASSWORD:-YourPass123!}
+      - MSSQL_SA_PASSWORD=${DB_PASSWORD:?err}
       - MSSQL_DBNAME=ATCR
     ports:
       - "1433:1433"
     volumes:
       - sqldata:/var/opt/mssql
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${DB_PASSWORD:-YourPass123!}" -C -Q "SELECT 1" || exit 1
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${DB_PASSWORD:?err}" -C -Q "SELECT 1" || exit 1
       interval: 10s
       timeout: 5s
       retries: 10

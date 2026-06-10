@@ -30,3 +30,7 @@ temp/
 
 # Local config
 .claude/settings.local.json
+
+# Superpowers / Understand-Anything
+.superpowers/
+.understand-anything/
