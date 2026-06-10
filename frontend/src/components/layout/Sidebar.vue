@@ -25,13 +25,34 @@
           暂无合同，点击上方按钮上传
         </div>
         <div
-          v-for="c in contracts"
+          v-for="c in sortedContracts"
           :key="c.id"
           class="contract-item"
-          :class="{ active: c.id === activeId }"
+          :class="{ active: c.id === activeId, translated: c.source === 'translated' }"
+          :style="c.source === 'translated' ? { paddingLeft: '28px' } : {}"
           @click="$emit('select', c.id)"
         >
-          <div class="contract-name">{{ c.original_filename }}</div>
+          <div class="contract-name">
+            <n-tag
+              v-if="c.source_lang && c.source_lang !== 'zh' && c.source !== 'translated'"
+              type="info"
+              size="tiny"
+              :bordered="false"
+              class="lang-tag"
+            >
+              {{ LANG_LABELS[c.source_lang] || c.source_lang.toUpperCase() }}
+            </n-tag>
+            <n-tag
+              v-if="c.source === 'translated'"
+              type="success"
+              size="tiny"
+              :bordered="false"
+              class="lang-tag"
+            >
+              译文
+            </n-tag>
+            {{ c.original_filename }}
+          </div>
           <div class="contract-meta">
             {{ formatDate(c.created_at) }}
             <span class="clause-count" v-if="c.clause_count">
@@ -86,14 +107,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { NButton, NIcon, NScrollbar, NTag } from 'naive-ui'
 import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline } from '@vicons/ionicons5'
 import { useExportPDF } from '@/composables/useExportPDF'
 import { useReviewStore } from '@/stores/review'
 import type { Contract } from '@/stores/contract'
 
-defineProps<{
+const props = defineProps<{
   contracts: Contract[]
   activeId: number | null
   loading: boolean
@@ -107,6 +128,34 @@ defineEmits<{
 
 const { exporting, exportReviewPDF } = useExportPDF()
 const reviewStore = useReviewStore()
+
+const LANG_LABELS: Record<string, string> = {
+  en: 'EN', zh: '中', ja: '日', ko: '韩', fr: 'FR', de: 'DE',
+}
+
+const sortedContracts = computed(() => {
+  const list = [...props.contracts]
+  // 译文合同紧跟原文之后显示
+  const result: Contract[] = []
+  const children = new Map<number, Contract[]>()
+  for (const c of list) {
+    if (c.parent_contract_id != null) {
+      const siblings = children.get(c.parent_contract_id) || []
+      siblings.push(c)
+      children.set(c.parent_contract_id, siblings)
+    }
+  }
+  for (const c of list) {
+    if (c.parent_contract_id == null) {
+      result.push(c)
+      const kids = children.get(c.id)
+      if (kids) {
+        result.push(...kids)
+      }
+    }
+  }
+  return result
+})
 const exportingId = ref<number | null>(null)
 
 async function handleExport(contractId: number) {
@@ -184,6 +233,20 @@ function formatDate(dateStr: string): string {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding-right: 50px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lang-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.contract-item.translated {
+  font-size: 13px;
+}
+.contract-item.translated .contract-name {
+  font-weight: 400;
+  color: #666;
 }
 .contract-meta {
   font-size: 12px;

@@ -12,6 +12,9 @@ class ContractOut(BaseModel):
     original_filename: str
     content_type: str
     source: str = "upload"
+    parent_contract_id: Optional[int] = None
+    source_lang: Optional[str] = None
+    target_lang: Optional[str] = None
     file_size: int
     clause_count: int
     review_count: int = 0

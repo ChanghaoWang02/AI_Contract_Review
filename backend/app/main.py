@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from app.config import get_settings
 from app.core.logging_config import setup_logging
 from app.db.session import init_db, SessionLocal
-from app.api import contracts, reviews, chat, rules, draft
+from app.api import contracts, reviews, chat, rules, draft, translate
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ app.include_router(reviews.router, prefix="/api/reviews", tags=["审核管理"])
 app.include_router(chat.router, prefix="/api/chat", tags=["AI 对话"])
 app.include_router(rules.router, prefix="/api/rules", tags=["审核规则"])
 app.include_router(draft.router, prefix="/api/draft", tags=["合同起草"])
+app.include_router(translate.router, prefix="/api/translate", tags=["合同翻译"])
 
 
 @app.middleware("http")

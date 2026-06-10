@@ -6,6 +6,9 @@ export interface Contract {
   original_filename: string
   content_type: string
   source: string
+  parent_contract_id: number | null
+  source_lang: string | null
+  target_lang: string | null
   file_size: number
   clause_count: number
   review_count: number

@@ -22,11 +22,16 @@ class Contract(Base):
     original_filename = Column(NVARCHAR(255), nullable=False)
     content = Column(Text, nullable=False)
     content_type = Column(NVARCHAR(20), nullable=False)  # pdf / docx / txt
-    source = Column(NVARCHAR(20), default="upload")        # upload / draft
+    source = Column(NVARCHAR(20), default="upload")        # upload / draft / translated
+    parent_contract_id = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=True)
+    source_lang = Column(NVARCHAR(10), nullable=True)       # en / zh / ja / ko ...
+    target_lang = Column(NVARCHAR(10), nullable=True)
     file_size = Column(Integer, nullable=False)
     clause_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=utcnow)
 
+    parent = relationship("Contract", back_populates="children", remote_side=[id])
+    children = relationship("Contract", back_populates="parent", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="contract", cascade="all, delete-orphan")
 
     def __repr__(self):

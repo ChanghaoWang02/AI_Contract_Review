@@ -13,6 +13,14 @@
         <n-tag v-else-if="reviewStatus === 'completed'" type="success" size="small">
           审核完成
         </n-tag>
+        <n-button
+          v-if="reviewStatus === 'completed'"
+          size="small"
+          secondary
+          @click="showTranslateReport = true"
+        >
+          <n-icon><language-outline /></n-icon> 翻译报告
+        </n-button>
         <n-tag v-else-if="reviewStatus === 'error'" type="error" size="small">
           审核失败
         </n-tag>
@@ -79,6 +87,39 @@
       </div>
     </div>
 
+    <!-- 翻译报告弹窗 -->
+    <n-modal v-model:show="showTranslateReport" style="width: 700px; max-width: 90vw">
+      <div class="translate-report-modal">
+        <h3>翻译审核报告</h3>
+
+        <div v-if="!translateResult && !translatingReport" class="translate-options">
+          <p>选择翻译方向：</p>
+          <n-select
+            v-model:value="reportTargetLang"
+            :options="reportLangOptions"
+            style="width: 200px; margin-bottom: 16px"
+          />
+          <n-button type="primary" @click="doTranslateReport">
+            开始翻译
+          </n-button>
+        </div>
+
+        <div v-if="translatingReport" class="translate-progress">
+          <n-spin size="small" /> 翻译中...
+        </div>
+
+        <div v-if="translateResult" class="translate-result">
+          <div class="result-text">{{ translateResult }}</div>
+          <div class="result-actions">
+            <n-button secondary @click="downloadTranslatedReport">
+              <n-icon><download-outline /></n-icon> 下载 TXT
+            </n-button>
+            <n-button @click="resetTranslateReport">重新翻译</n-button>
+          </div>
+        </div>
+      </div>
+    </n-modal>
+
     <!-- 输入区 -->
     <ChatInput
       :anchor="chat.anchorClause"
@@ -91,8 +132,9 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { NIcon, NTag, NButton, NAlert } from 'naive-ui'
-import { ChatbubblesOutline, ChevronBackOutline } from '@vicons/ionicons5'
+import { NIcon, NTag, NButton, NAlert, NModal, NSelect, NSpin } from 'naive-ui'
+import { ChatbubblesOutline, ChevronBackOutline, LanguageOutline, DownloadOutline } from '@vicons/ionicons5'
+import { useTranslate } from '@/composables/useTranslate'
 import { useChatStore } from '@/stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import ChatInput from './ChatInput.vue'
@@ -133,6 +175,66 @@ watch(
 
 function onSend(content: string) {
   emit('send', content)
+}
+
+// ── 翻译报告 ──
+
+const showTranslateReport = ref(false)
+const reportTargetLang = ref('en')
+const translatingReport = ref(false)
+const translateResult = ref('')
+
+const { translateText } = useTranslate()
+
+const reportLangOptions = [
+  { label: '中文 → English', value: 'en' },
+  { label: 'English → 中文', value: 'zh' },
+]
+
+async function doTranslateReport() {
+  // 收集当前审核的摘要内容
+  const reviewStore = (await import('@/stores/review')).useReviewStore()
+  const review = reviewStore.currentReview
+  if (!review?.findings) return
+
+  const summary = review.findings.summary || ''
+  const clausesText =
+    review.findings.clauses
+      ?.map(
+        (c) =>
+          `【${c.risk === 'high' ? '高风险' : c.risk === 'medium' ? '中风险' : '低风险'}】${c.summary}：${c.original_text}`,
+      )
+      .join('\n\n') || ''
+
+  const fullText = `审核报告摘要：\n${summary}\n\n逐条分析：\n${clausesText}`
+
+  translatingReport.value = true
+  translateResult.value = ''
+
+  const result = await translateText(fullText, reportTargetLang.value)
+  if (result) {
+    translateResult.value = result.content
+  }
+  translatingReport.value = false
+}
+
+function resetTranslateReport() {
+  translateResult.value = ''
+  reportTargetLang.value = 'en'
+}
+
+function downloadTranslatedReport() {
+  const blob = new Blob([translateResult.value], {
+    type: 'text/plain;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ATCR_Review_Report_${reportTargetLang.value}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -241,5 +343,50 @@ function onSend(content: string) {
 @keyframes bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-6px); }
+}
+
+/* 翻译报告模态框 */
+.translate-report-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+.translate-report-modal h3 {
+  margin: 0 0 16px;
+}
+.translate-options p {
+  color: #666;
+  margin: 0 0 8px;
+}
+.translate-progress {
+  padding: 24px 0;
+  text-align: center;
+  color: #999;
+}
+.translate-result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.result-text {
+  flex: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  max-height: 50vh;
+}
+.result-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 </style>

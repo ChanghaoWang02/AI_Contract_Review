@@ -11,27 +11,51 @@
     />
 
     <!-- 主内容区 -->
-    <div class="main-area">
-      <!-- 聊天面板 -->
-      <ChatPanel
-        :review-id="activeReviewId"
-        :review-status="reviewStore.currentReview?.status"
-        :contract-collapsed="!showContractPanel"
-        @send="onSendMessage"
-        @expand-contract="showContractPanel = true"
-      />
+    <div class="main-content">
+      <!-- Tab 栏 -->
+      <div class="tab-bar">
+        <div class="tab" :class="{ active: activeTab === 'review' }" @click="switchTab('review')">
+          <n-icon><document-text-outline /></n-icon> 审核
+        </div>
+        <div class="tab" :class="{ active: activeTab === 'translate' }" @click="switchTab('translate')">
+          <n-icon><language-outline /></n-icon> 翻译
+        </div>
+        <div class="tab" :class="{ active: activeTab === 'compare' }" @click="switchTab('compare')">
+          <n-icon><git-compare-outline /></n-icon> 对比
+        </div>
+      </div>
 
-      <!-- 合同面板 (可收起) -->
-      <transition name="slide">
-        <ContractViewer
-          v-if="showContractPanel"
-          :contract="contractStore.currentContract"
-          :findings="reviewStore.currentReview?.findings"
-          @clause-click="onClauseClick"
-          @close="showContractPanel = false"
-          @compare="onCompareClick"
+      <div class="main-area">
+        <!-- 审核 Tab：聊天面板 + 合同面板 -->
+        <template v-if="activeTab === 'review'">
+          <ChatPanel
+            :review-id="activeReviewId"
+            :review-status="reviewStore.currentReview?.status"
+            :contract-collapsed="!showContractPanel"
+            @send="onSendMessage"
+            @expand-contract="showContractPanel = true"
+          />
+
+          <transition name="slide">
+            <ContractViewer
+              v-if="showContractPanel"
+              :contract="contractStore.currentContract"
+              :findings="reviewStore.currentReview?.findings"
+              @clause-click="onClauseClick"
+              @close="showContractPanel = false"
+              @compare="onCompareClick"
+            />
+          </transition>
+        </template>
+
+        <!-- 翻译 Tab -->
+        <TranslatePanel
+          v-if="activeTab === 'translate'"
+          :contract-id="activeContractId"
+          :contract-content="contractStore.currentContract?.content || ''"
+          @saved="onTranslationSaved"
         />
-      </transition>
+      </div>
     </div>
 
     <!-- 上传弹窗 -->
@@ -83,7 +107,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NModal, NSpin, useMessage, useDialog } from 'naive-ui'
+import { NModal, NSpin, NIcon, useMessage, useDialog } from 'naive-ui'
+import { DocumentTextOutline, LanguageOutline, GitCompareOutline } from '@vicons/ionicons5'
 import { useContractStore } from '@/stores/contract'
 import { useReviewStore } from '@/stores/review'
 import { useChatStore } from '@/stores/chat'
@@ -94,6 +119,8 @@ import UploadDialog from '@/components/contract/UploadDialog.vue'
 import CompareUploadDialog from '@/components/contract/CompareUploadDialog.vue'
 import CompareModal from '@/components/compare/CompareModal.vue'
 import ReviewReport from '@/components/review/ReviewReport.vue'
+import TranslatePanel from '@/components/translate/TranslatePanel.vue'
+import { useTranslateStore } from '@/stores/translate'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -102,6 +129,7 @@ const router = useRouter()
 const contractStore = useContractStore()
 const reviewStore = useReviewStore()
 const chatStore = useChatStore()
+const translateStore = useTranslateStore()
 
 const showUpload = ref(false)
 const showContractPanel = ref(true)
@@ -112,6 +140,7 @@ const showCompare = ref(false)
 const activeContractId = ref<number | null>(null)
 const activeReviewId = ref<number | null>(null)
 const compareModalRef = ref<InstanceType<typeof CompareModal> | null>(null)
+const activeTab = ref<'review' | 'translate' | 'compare'>('review')
 
 onMounted(async () => {
   await contractStore.fetchContracts()
@@ -159,6 +188,34 @@ async function startReview(contractId: number) {
   } finally {
     reviewCreating.value = false
   }
+}
+
+function switchTab(tab: 'review' | 'translate' | 'compare') {
+  activeTab.value = tab
+  // 翻译 Tab 激活时自动折叠合同面板
+  if (tab === 'translate') {
+    showContractPanel.value = false
+  }
+  // 对比 Tab：打开上传弹窗
+  if (tab === 'compare') {
+    if (!activeContractId.value) {
+      message.warning('请先选择一份合同')
+      activeTab.value = 'review'
+      return
+    }
+    showCompareUpload.value = true
+    // 不长期停留在对比 Tab，弹窗关闭后回到审核
+    activeTab.value = 'review'
+  }
+  // 清理翻译状态
+  if (tab !== 'translate') {
+    translateStore.reset()
+  }
+}
+
+function onTranslationSaved(childId: number) {
+  message.success('译文已保存')
+  contractStore.fetchContracts()
 }
 
 const onSelectContract = async (id: number, skipConfirm = false) => {
@@ -261,6 +318,40 @@ const onCompareConfirm = (file: File, perspective: string) => {
   height: 100vh;
   overflow: hidden;
   background: #f5f7fa;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fff;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #999;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.tab:hover {
+  color: #666;
+}
+.tab.active {
+  color: #4C6EF5;
+  border-bottom-color: #4C6EF5;
+  font-weight: 500;
 }
 
 .main-area {
