@@ -5,9 +5,6 @@
       <div class="header-left">
         <n-icon size="18"><language-outline /></n-icon>
         <span>合同翻译</span>
-        <n-tag v-if="store.tier >= 2" type="warning" size="small">
-          Tier {{ store.tier }}
-        </n-tag>
       </div>
       <div class="header-right">
         <!-- Ready 状态：目标语言 + 开始按钮 -->
@@ -54,21 +51,7 @@
       </div>
     </div>
 
-    <!-- Tier 提示横幅 -->
-    <n-alert
-      v-if="store.tier >= 2 && store.sessionState === 'done'"
-      type="warning"
-      class="tier-banner"
-      closable
-    >
-      <template v-if="store.tier === 3">
-        该语言与中文差异较大（Tier 3），翻译经英文中转，请务必人工复核术语准确性。
-      </template>
-      <template v-else>
-        该语言为 Tier 2，不确定处已标注【需确认】，建议人工复核关键术语。
-      </template>
-    </n-alert>
-
+    
     <!-- 错误提示 -->
     <n-alert
       v-if="store.error && store.sessionState !== 'translating'"
@@ -84,7 +67,7 @@
     <div v-if="store.sessionState === 'idle'" class="state-placeholder">
       <div class="placeholder-icon">🌐</div>
       <h3>合同翻译</h3>
-      <p>选择一份非中文合同，将条款逐条翻译为中文。<br/>支持英文、日文、韩文、法文、德文等多语言。</p>
+      <p>上传合同后自动检测源语言，选择目标语言后开始翻译。<br/>支持任意语言对：中文、英文、日文、韩文、法文、德文等。</p>
     </div>
 
     <!-- ready 状态 -->
@@ -190,18 +173,27 @@ watch(
 )
 
 function checkLanguage() {
-  // 简单的启发式检测：ASCII 占比高 → 英文/非中文
+  // 启发式快速检测源语言，支持任意语言
   const sample = props.contractContent.slice(0, 2000)
   const ascii = sample.replace(/[^\x00-\x7f]/g, '').length
   const ratio = ascii / Math.max(sample.length, 1)
 
-  if (ratio > 0.6) {
-    // 非中文 → ready to translate
+  // CJK 字符检测
+  const cjkCount = (sample.match(/[一-鿿぀-ゟ゠-ヿ가-힯]/g) || []).length
+  const cjkRatio = cjkCount / Math.max(sample.length, 1)
+
+  if (cjkRatio > 0.08) {
+    // 包含中文 → 源语言为中文
+    store.startSession(props.contractId!, 'en') // 默认译英
+    store.setSourceInfo('zh', 1)
+  } else if (ratio > 0.85) {
+    // 高 ASCII → 英文
+    store.startSession(props.contractId!, 'zh') // 默认译中
+    store.setSourceInfo('en', 1)
+  } else {
+    // 其他语言，默认译中
     store.startSession(props.contractId!, 'zh')
     store.setSourceInfo('en', 1)
-  } else if (sample.match(/[一-鿿]/)) {
-    // 中文 → idle（不需要翻译）
-    store.reset()
   }
 }
 
@@ -235,6 +227,7 @@ async function onRetranslateClause(index: number) {
     props.contractId,
     index,
     clause.original,
+    selectedTargetLang.value,
   )
 
   if (result) {

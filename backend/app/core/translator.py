@@ -61,17 +61,15 @@ LANGUAGE_DETECT_PROMPT = """请检测以下文本的源语言，只返回一个 
 
 
 # ═══════════════════════════════════════════════════════════
-# Tier 系统
+# Tier 系统（信息性，不再限制语言对）
 # ═══════════════════════════════════════════════════════════
-
-TIER1_TARGET_LANGS = {"zh", "en"}   # en↔zh 直接翻译
-
-TIER2_SOURCE_LANGS = {"ja", "ko", "fr", "de"}  # 日韩法德→zh 需复核
 
 LANG_NAMES = {
     "zh": "中文", "en": "英文", "ja": "日文", "ko": "韩文",
     "fr": "法文", "de": "德文", "es": "西班牙文", "ru": "俄文",
     "ar": "阿拉伯文", "th": "泰文", "vi": "越南文", "pt": "葡萄牙文",
+    "it": "意大利文", "nl": "荷兰文", "pl": "波兰文", "tr": "土耳其文",
+    "pt-BR": "巴西葡萄牙文", "es-MX": "墨西哥西班牙文",
 }
 
 # CJK Unicode 范围（Rough detection — 无需 LLM）
@@ -89,13 +87,9 @@ class TranslationEngine:
 
     @staticmethod
     def classify_tier(source_lang: str, target_lang: str) -> int:
-        """根据语言对返回质量 Tier"""
-        pair = {source_lang, target_lang}
-        if pair <= TIER1_TARGET_LANGS and len(pair) == 2:
-            return 1
-        if source_lang in TIER2_SOURCE_LANGS or target_lang in TIER2_SOURCE_LANGS:
-            return 2
-        return 3
+        """根据语言对返回质量 Tier（信息性，不再限制语言对）"""
+        # 所有语言对均支持，直接返回 Tier 1
+        return 1
 
     @staticmethod
     def quick_detect(text: str) -> Optional[str]:

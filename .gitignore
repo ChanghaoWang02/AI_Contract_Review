@@ -12,6 +12,8 @@ logs/
 # Node
 node_modules/
 dist/
+package-lock.json
+yarn.lock
 
 # IDE
 .vscode/

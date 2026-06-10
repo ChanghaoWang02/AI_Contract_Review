@@ -17,6 +17,7 @@ class TranslateClauseRequest(BaseModel):
     contract_id: int
     clause_index: int
     original_text: str
+    target_lang: str                 # 目标语言
     instruction: str = ""            # 编辑指令（可选）
 
 

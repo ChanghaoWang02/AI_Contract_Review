@@ -126,8 +126,8 @@ async def translate_clause(body: TranslateClauseRequest, db: Session = Depends(g
     source_lang = detect_result["detected"]
     tier = detect_result["tier"]
 
-    # 目标语言：源语言是中文则译英，否则译中
-    target_lang = "en" if source_lang == "zh" else "zh"
+    # 目标语言：来自请求参数（前端选择）
+    target_lang = body.target_lang
 
     # 构造 Clause 对象
     clause = ContractChunker._build_clause(

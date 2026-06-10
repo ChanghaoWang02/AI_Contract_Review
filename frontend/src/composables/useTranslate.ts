@@ -149,8 +149,9 @@ export function useTranslate() {
       return true
     } catch (e: any) {
       if (e.name === 'AbortError') return false
-      store.error = e.message || '翻译失败'
-      message.error(store.error)
+      const msg = e.message || '翻译失败'
+      store.error = msg
+      message.error(msg)
       return false
     } finally {
       isStreaming.value = false
@@ -168,6 +169,7 @@ export function useTranslate() {
     cId: number,
     clauseIndex: number,
     originalText: string,
+    targetLang: string,
     instruction?: string,
   ): Promise<string | null> {
     abort()
@@ -187,6 +189,7 @@ export function useTranslate() {
           contract_id: cId,
           clause_index: clauseIndex,
           original_text: originalText,
+          target_lang: targetLang,
           instruction: instruction || '',
         }),
         signal: controller.signal,

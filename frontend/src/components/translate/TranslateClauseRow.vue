@@ -3,7 +3,7 @@
     <div class="clause-header">
       <span class="clause-index">条款 {{ index + 1 }}</span>
       <span class="status-icon">
-        <n-spin v-if="status === 'streaming'" size="14" />
+        <n-spin v-if="status === 'streaming'" :size="14" />
         <n-icon v-else-if="status === 'done'" color="#2f9e44"><checkmark-circle-outline /></n-icon>
         <n-icon v-else-if="status === 'error'" color="#e03131"><alert-circle-outline /></n-icon>
         <n-icon v-else color="#ccc"><ellipse-outline /></n-icon>
