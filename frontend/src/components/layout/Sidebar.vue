@@ -102,8 +102,7 @@
       <div class="nav-section" style="margin-bottom: 8px">
         <div
           class="nav-link"
-          :class="{ disabled: !activeId }"
-          @click="activeId && $emit('translate')"
+          @click="$emit('translate')"
         >
           <n-icon><language-outline /></n-icon> 合同翻译
         </div>
