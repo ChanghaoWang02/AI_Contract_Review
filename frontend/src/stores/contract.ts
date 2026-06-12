@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useApiClient } from '@/composables/useApiClient'
 
 export interface Contract {
   id: number
@@ -24,13 +25,12 @@ export const useContractStore = defineStore('contract', () => {
   const contracts = ref<Contract[]>([])
   const currentContract = ref<ContractDetail | null>(null)
   const loading = ref(false)
+  const api = useApiClient()
 
   async function fetchContracts() {
     loading.value = true
     try {
-      const res = await fetch('/api/contracts')
-      if (!res.ok) throw new Error('获取合同列表失败')
-      contracts.value = await res.json()
+      contracts.value = await api.get<Contract[]>('/api/contracts')
     } finally {
       loading.value = false
     }
@@ -39,9 +39,7 @@ export const useContractStore = defineStore('contract', () => {
   async function fetchContract(id: number) {
     loading.value = true
     try {
-      const res = await fetch(`/api/contracts/${id}`)
-      if (!res.ok) throw new Error('合同不存在')
-      currentContract.value = await res.json()
+      currentContract.value = await api.get<ContractDetail>(`/api/contracts/${id}`)
     } finally {
       loading.value = false
     }
@@ -52,17 +50,9 @@ export const useContractStore = defineStore('contract', () => {
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await fetch('/api/contracts/upload', {
-        method: 'POST',
-        body: form,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || '上传失败')
-      }
-      const contract = await res.json()
+      const contract = await api.post<Contract>('/api/contracts/upload', form)
       contracts.value.unshift(contract)
-      return contract as Contract
+      return contract
     } finally {
       loading.value = false
     }
@@ -77,8 +67,7 @@ export const useContractStore = defineStore('contract', () => {
   }
 
   async function deleteContract(id: number) {
-    const res = await fetch(`/api/contracts/${id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error('删除失败')
+    await api.delete(`/api/contracts/${id}`)
     contracts.value = contracts.value.filter((c) => c.id !== id)
     if (currentContract.value?.id === id) {
       currentContract.value = null

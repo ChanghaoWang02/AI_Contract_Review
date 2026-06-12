@@ -99,6 +99,15 @@
           <n-icon><create-outline /></n-icon> 起草合同
         </router-link>
       </div>
+      <div class="nav-section" style="margin-bottom: 8px">
+        <div
+          class="nav-link"
+          :class="{ disabled: !activeId }"
+          @click="activeId && $emit('translate')"
+        >
+          <n-icon><language-outline /></n-icon> 合同翻译
+        </div>
+      </div>
       <router-link to="/rules" class="nav-link">
         <n-icon><settings-outline /></n-icon> 审核规则
       </router-link>
@@ -109,7 +118,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NButton, NIcon, NScrollbar, NTag } from 'naive-ui'
-import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline } from '@vicons/ionicons5'
+import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline, LanguageOutline } from '@vicons/ionicons5'
 import { useExportPDF } from '@/composables/useExportPDF'
 import { useReviewStore } from '@/stores/review'
 import type { Contract } from '@/stores/contract'
@@ -124,9 +133,10 @@ defineEmits<{
   select: [id: number]
   upload: []
   delete: [id: number]
+  translate: []
 }>()
 
-const { exporting, exportReviewPDF } = useExportPDF()
+const { exportReviewPDF } = useExportPDF()
 const reviewStore = useReviewStore()
 
 const LANG_LABELS: Record<string, string> = {
@@ -312,5 +322,10 @@ function formatDate(dateStr: string): string {
 }
 .draft-link:hover {
   background: #e8ebff;
+}
+.nav-link.disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 </style>

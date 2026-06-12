@@ -73,7 +73,7 @@ async def chat_stream(body: ChatMessageIn, db: Session = Depends(get_db)):
             logger.error("Chat stream 异常 | review=%d | %s: %s", review.id, type(e).__name__, e)
             yield f"data: {json.dumps({'event': 'error', 'data': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.get("/{review_id}/history", response_model=list[ChatMessageOut])

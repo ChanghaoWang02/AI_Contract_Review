@@ -52,9 +52,11 @@
 import { ref, onMounted } from 'vue'
 import { NButton, NInput, NAlert } from 'naive-ui'
 import { useDraftStore } from '@/stores/draft'
+import { useSSE } from '@/composables/useSSE'
 
 const draft = useDraftStore()
 const displayText = ref('')
+const sse = useSSE()
 
 onMounted(() => {
   displayText.value = draft.generatedText
@@ -73,47 +75,21 @@ async function startGeneration() {
   displayText.value = ''
 
   try {
-    const res = await fetch('/api/draft/generate', {
+    await sse.connect('/api/draft/generate', {
+      onToken: (token) => { displayText.value += token },
+      onDone: (data) => {
+        draft.setGeneratedText(data?.content || displayText.value)
+      },
+      onError: (msg) => {
+        draft.generateError = msg || '生成失败'
+      },
+    }, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         contract_type: draft.contractType,
         form_data: draft.formData,
-      }),
+      },
     })
-
-    if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
-
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('无法读取响应流')
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.event === 'token') {
-              displayText.value += data.data
-            } else if (data.event === 'done') {
-              const doneData = JSON.parse(data.data)
-              draft.setGeneratedText(doneData.content || displayText.value)
-            } else if (data.event === 'error') {
-              draft.generateError = data.data?.message || '生成失败'
-            }
-          } catch { /* ignore */ }
-        }
-      }
-    }
   } catch (e: any) {
     if (e.name !== 'AbortError') {
       draft.generateError = e.message || '生成失败，请重试'

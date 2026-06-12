@@ -218,7 +218,7 @@ async def compare_contract(
             )
             yield f"data: {safe_msg}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.post("/save-draft", response_model=ContractOut)

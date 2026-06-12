@@ -111,7 +111,7 @@ async def translate_generate(body: TranslateGenerateRequest, db: Session = Depen
             logger.error("合同翻译全局异常: %s", e, exc_info=True)
             yield f"data: {_sse_encode({'event': 'error', 'data': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.post("/clause")
@@ -157,7 +157,7 @@ async def translate_clause(body: TranslateClauseRequest, db: Session = Depends(g
         except Exception as e:
             yield f"data: {_sse_encode({'event': 'error', 'data': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.post("/text")
@@ -184,7 +184,7 @@ async def translate_text(body: TranslateTextRequest):
             logger.error("文本翻译全局异常: %s", e, exc_info=True)
             yield f"data: {_sse_encode({'event': 'error', 'data': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.post("/save")

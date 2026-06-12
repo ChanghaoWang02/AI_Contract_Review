@@ -10,9 +10,11 @@ import { ref } from 'vue'
 
 export interface SSEOptions {
   onToken?: (token: string) => void
-  onProgress?: (message: string) => void
+  onProgress?: (data: any) => void
   onDone?: (data: any) => void
   onError?: (error: string) => void
+  /** 通用事件分发回调，用于消费非标准事件名的结构化数据 */
+  onEvent?: (event: string, data: any) => void
 }
 
 export interface SSEConnectOptions {
@@ -50,15 +52,20 @@ export function useSSE() {
 
     const method = connectOpts.method || 'GET'
     const headers: Record<string, string> = { Accept: 'text/event-stream' }
-    if (connectOpts.body) {
+    let body = connectOpts.body
+    if (body && !(body instanceof FormData)) {
       headers['Content-Type'] = 'application/json'
+      body = JSON.stringify(body)
+    } else if (body instanceof FormData) {
+      // 浏览器自动设置 Content-Type: multipart/form-data + boundary
+      // 不手动设置任何 Content-Type header
     }
 
     try {
       const res = await fetch(url, {
         method,
         headers,
-        body: connectOpts.body ? JSON.stringify(connectOpts.body) : undefined,
+        body,
         signal: controller.signal,
       })
 
@@ -86,17 +93,31 @@ export function useSSE() {
           if (line.startsWith('data: ')) {
             try {
               const payload = JSON.parse(line.slice(6))
-
-              if (payload.event === 'token' && options.onToken) {
-                options.onToken(payload.data)
-              } else if (payload.event === 'progress' && options.onProgress) {
-                options.onProgress(payload.data)
-              } else if (payload.event === 'done' && options.onDone) {
-                const result = payload.data ? JSON.parse(payload.data) : {}
-                options.onDone(result)
-              } else if (payload.event === 'error' && options.onError) {
-                options.onError(payload.data || '未知错误')
+              // Normalize data: payload.data 可能是 string 或 object
+              // 只有当它是 JSON 字符串（以 { 或 [开头）时才 parse；普通文本 token 直接使用
+              let data: any
+              if (typeof payload.data === 'string') {
+                const trimmed = payload.data.trim()
+                data = (trimmed.startsWith('{') || trimmed.startsWith('['))
+                  ? JSON.parse(payload.data)
+                  : payload.data
+              } else {
+                data = payload.data
               }
+
+              // Specific handlers fire first; onEvent fires after as supplementary notification
+              if (payload.event === 'token' && options.onToken) {
+                options.onToken(typeof data === 'string' ? data : JSON.stringify(data))
+              } else if (payload.event === 'progress' && options.onProgress) {
+                options.onProgress(data)
+              } else if (payload.event === 'done' && options.onDone) {
+                options.onDone(data)
+              } else if (payload.event === 'error' && options.onError) {
+                options.onError(typeof data === 'string' ? data : data?.message || '未知错误')
+              }
+
+              // 通用事件分发（在 specific handlers 之后，避免 double-dispatch 问题）
+              options.onEvent?.(payload.event, data)
             } catch {
               // 忽略无法解析的行
             }

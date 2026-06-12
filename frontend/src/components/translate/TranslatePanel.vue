@@ -100,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { NButton, NIcon, NTag, NSelect, NProgress, NAlert } from 'naive-ui'
 import {
   LanguageOutline,
@@ -116,6 +116,7 @@ import TranslateClauseRow from './TranslateClauseRow.vue'
 const props = defineProps<{
   contractId: number | null
   contractContent: string
+  activeTab: string
 }>()
 
 const emit = defineEmits<{
@@ -162,6 +163,17 @@ watch(
   },
 )
 
+// 切换到翻译 Tab 时，即使 contractId 没变也重新检测语言
+watch(
+  () => props.activeTab,
+  (tab) => {
+    if (tab === 'translate' && props.contractId && props.contractContent) {
+      store.reset()
+      checkLanguage()
+    }
+  },
+)
+
 // 初始化时检测
 watch(
   () => props.contractContent,
@@ -171,6 +183,12 @@ watch(
     }
   },
 )
+
+onMounted(() => {
+  if (props.contractId && props.contractContent) {
+    checkLanguage()
+  }
+})
 
 function checkLanguage() {
   // 启发式快速检测源语言，支持任意语言

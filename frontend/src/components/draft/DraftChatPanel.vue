@@ -42,6 +42,7 @@
 import { ref, nextTick, watch } from 'vue'
 import { NButton, NInput } from 'naive-ui'
 import { useDraftStore } from '@/stores/draft'
+import { useSSE } from '@/composables/useSSE'
 
 const props = defineProps<{
   anchoredClause: string | null
@@ -56,6 +57,7 @@ const draft = useDraftStore()
 const inputText = ref('')
 const streamingText = ref('')
 const chatEl = ref<HTMLElement>()
+const sse = useSSE()
 
 async function sendInstruction() {
   if (!props.anchoredClause || !inputText.value.trim() || draft.isEditing) return
@@ -68,55 +70,29 @@ async function sendInstruction() {
   streamingText.value = ''
 
   try {
-    const res = await fetch('/api/draft/chat', {
+    await sse.connect('/api/draft/chat', {
+      onToken: (token) => { streamingText.value += token },
+      onDone: (data) => {
+        const revised = data?.revised_clause || streamingText.value
+        draft.addChatMessage({ role: 'assistant', content: revised })
+        emit('clauseRevised', revised)
+        streamingText.value = ''
+      },
+      onError: (msg) => {
+        draft.addChatMessage({
+          role: 'system',
+          content: `❌ ${msg || '编辑失败'}`,
+        })
+        streamingText.value = ''
+      },
+    }, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         anchored_clause: props.anchoredClause,
         clause_titles: props.clauseTitles,
         instruction,
-      }),
+      },
     })
-
-    if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
-
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('无法读取响应流')
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.event === 'token') {
-              streamingText.value += data.data
-            } else if (data.event === 'done') {
-              const doneData = JSON.parse(data.data)
-              const revised = doneData.revised_clause || streamingText.value
-              draft.addChatMessage({ role: 'assistant', content: revised })
-              emit('clauseRevised', revised)
-              streamingText.value = ''
-            } else if (data.event === 'error') {
-              draft.addChatMessage({
-                role: 'system',
-                content: `❌ ${data.data?.message || '编辑失败'}`,
-              })
-              streamingText.value = ''
-            }
-          } catch { /* ignore */ }
-        }
-      }
-    }
   } catch (e: any) {
     if (e.name !== 'AbortError') {
       draft.addChatMessage({ role: 'system', content: `❌ ${e.message}` })

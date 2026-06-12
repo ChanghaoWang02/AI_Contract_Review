@@ -221,7 +221,7 @@ async def create_review_stream(body: ReviewCreate, db: Session = Depends(get_db)
             except Exception:
                 db.rollback()
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(generate(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.get("/{review_id}/stream")
@@ -235,13 +235,13 @@ async def stream_review(review_id: int, db: Session = Depends(get_db)):
         if review.findings_json:
             try:
                 findings = json.loads(review.findings_json)
-                yield f"data: {_sse_encode({'event': 'done', 'data': json.dumps(findings, ensure_ascii=False)})}\n\n"
+                yield f"data: {_sse_encode({'event': 'done', 'data': findings})}\n\n"
             except json.JSONDecodeError:
                 yield f"data: {_sse_encode({'event': 'error', 'data': '无法解析审核结果'})}\n\n"
         else:
             yield f"data: {_sse_encode({'event': 'error', 'data': '审核结果为空'})}\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(generate(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.get("/by-contract/{contract_id}", response_model=list[ReviewOut])

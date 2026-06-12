@@ -87,6 +87,7 @@ import CompareSummary from './CompareSummary.vue'
 import type { CompareStats } from './CompareSummary.vue'
 import { ContractChunkerClient } from '@/core/chunker'
 import type { ContractDetail } from '@/stores/contract'
+import { useSSE } from '@/composables/useSSE'
 
 const props = defineProps<{
   show: boolean
@@ -100,7 +101,7 @@ const emit = defineEmits<{
 // 由父组件（HomeView）在 confirm 时调用
 const compareFile = ref<File | null>(null)
 const perspective = ref('neutral')
-const abortController = ref<AbortController | null>(null)
+const sse = useSSE()
 
 const loading = ref(false)
 const loadingText = ref('正在上传文件...')
@@ -139,7 +140,6 @@ function resetState() {
   changeItems.value = []
   highlightMap.value = {}
   summaryStats.value = null
-  abortController.value = null
 }
 
 // 由父组件调用以启动对比
@@ -160,58 +160,29 @@ async function startCompare(file: File, persp: string) {
     text: c.content,
   }))
 
-  const controller = new AbortController()
-  abortController.value = controller
+  const form = new FormData()
+  form.append('file', file)
+  form.append('perspective', persp)
 
   try {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('perspective', persp)
-
-    const res = await fetch(`/api/contracts/${props.contract.id}/compare`, {
+    await sse.connect(`/api/contracts/${props.contract.id}/compare`, {
+      onEvent: (event, data) => {
+        // 通用事件分发，内部调用 handleSSEEvent
+        handleSSEEvent({ event, data })
+      },
+      onError: (msg) => {
+        if (msg !== 'aborted') errorMsg.value = msg || '对比失败'
+        loading.value = false
+      },
+    }, {
       method: 'POST',
       body: form,
-      signal: controller.signal,
-      headers: { Accept: 'text/event-stream' },
     })
-
-    if (!res.ok) {
-      let detail = ''
-      try { const err = await res.json(); detail = err.detail || '' } catch { /* */ }
-      throw new Error(detail || `请求失败 (HTTP ${res.status})`)
-    }
-
     loading.value = false
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('无法读取响应流')
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const payload = JSON.parse(line.slice(6))
-          handleSSEEvent(payload)
-        } catch { /* ignore malformed lines */ }
-      }
-    }
   } catch (e: any) {
     if (e.name === 'AbortError') return
     errorMsg.value = e.message || '对比失败'
     loading.value = false
-  } finally {
-    if (abortController.value === controller) {
-      abortController.value = null
-    }
   }
 }
 
@@ -323,7 +294,7 @@ function onClauseClick(clauseId: string) {
 }
 
 function abort() {
-  abortController.value?.abort()
+  sse.abort()
 }
 
 // 弹窗关闭时断开 SSE

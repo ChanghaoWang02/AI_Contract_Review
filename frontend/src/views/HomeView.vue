@@ -3,36 +3,35 @@
     <!-- 侧边栏 -->
     <Sidebar
       :contracts="contractStore.contracts"
-      :active-id="activeContractId"
+      :active-id="contractSel.activeContractId.value"
       :loading="contractStore.loading"
-      @select="onSelectContract"
+      @select="contractSel.onSelectContract"
       @upload="onUploadClick"
-      @delete="onDeleteContract"
+      @delete="contractSel.onDeleteContract"
+      @translate="onTranslateClick"
+      @compare="onCompareClick"
     />
 
     <!-- 主内容区 -->
     <div class="main-content">
-      <!-- Tab 栏 -->
-      <div class="tab-bar">
-        <div class="tab" :class="{ active: activeTab === 'review' }" @click="switchTab('review')">
-          <n-icon><document-text-outline /></n-icon> 审核
-        </div>
-        <div class="tab" :class="{ active: activeTab === 'translate' }" @click="switchTab('translate')">
-          <n-icon><language-outline /></n-icon> 翻译
-        </div>
-        <div class="tab" :class="{ active: activeTab === 'compare' }" @click="switchTab('compare')">
-          <n-icon><git-compare-outline /></n-icon> 对比
-        </div>
-      </div>
-
       <div class="main-area">
-        <!-- 审核 Tab：聊天面板 + 合同面板 -->
-        <template v-if="activeTab === 'review'">
+        <!-- 翻译界面 -->
+        <template v-if="mainView === 'translate'">
+          <TranslatePanel
+            :contract-id="contractSel.activeContractId.value"
+            :contract-content="contractStore.currentContract?.content || ''"
+            active-tab="translate"
+            @saved="onTranslationSaved"
+          />
+        </template>
+
+        <!-- 审核界面 -->
+        <template v-else>
           <ChatPanel
-            :review-id="activeReviewId"
+            :review-id="contractSel.activeReviewId.value"
             :review-status="reviewStore.currentReview?.status"
             :contract-collapsed="!showContractPanel"
-            @send="onSendMessage"
+            @send="(content) => reviewFlow.onSendMessage(content, contractSel.activeReviewId.value!)"
             @expand-contract="showContractPanel = true"
           />
 
@@ -47,14 +46,6 @@
             />
           </transition>
         </template>
-
-        <!-- 翻译 Tab -->
-        <TranslatePanel
-          v-if="activeTab === 'translate'"
-          :contract-id="activeContractId"
-          :contract-content="contractStore.currentContract?.content || ''"
-          @saved="onTranslationSaved"
-        />
       </div>
     </div>
 
@@ -65,7 +56,7 @@
     />
 
     <!-- 审核中遮罩 -->
-    <n-modal v-model:show="reviewCreating" :mask-closable="false" :closable="false" style="width: 420px">
+    <n-modal v-model:show="reviewFlow.reviewCreating.value" :mask-closable="false" :closable="false" style="width: 420px">
       <div class="loading-modal">
         <n-spin size="large" />
         <h3>AI 正在审核合同...</h3>
@@ -74,7 +65,7 @@
     </n-modal>
 
     <!-- 审核报告弹窗 -->
-    <n-modal v-model:show="showReport" style="width: 900px; max-width: 95vw">
+    <n-modal v-model:show="reviewFlow.showReport.value" style="width: 900px; max-width: 95vw">
       <ReviewReport
         v-if="reviewStore.currentReview?.findings"
         :findings="reviewStore.currentReview.findings"
@@ -90,16 +81,16 @@
 
     <!-- 对比上传弹窗 -->
     <CompareUploadDialog
-      v-model:show="showCompareUpload"
-      @confirm="onCompareConfirm"
+      v-model:show="compareFlow.showCompareUpload.value"
+      @confirm="compareFlow.onCompareConfirm"
     />
 
     <!-- 对比全屏弹窗 -->
     <CompareModal
       ref="compareModalRef"
-      :show="showCompare"
+      :show="compareFlow.showCompare.value"
       :contract="contractStore.currentContract"
-      @update:show="showCompare = $event"
+      @update:show="compareFlow.showCompare.value = $event"
     />
   </div>
 </template>
@@ -107,8 +98,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NModal, NSpin, NIcon, useMessage, useDialog } from 'naive-ui'
-import { DocumentTextOutline, LanguageOutline, GitCompareOutline } from '@vicons/ionicons5'
+import { NModal, NSpin, useMessage } from 'naive-ui'
 import { useContractStore } from '@/stores/contract'
 import { useReviewStore } from '@/stores/review'
 import { useChatStore } from '@/stores/chat'
@@ -120,195 +110,71 @@ import CompareUploadDialog from '@/components/contract/CompareUploadDialog.vue'
 import CompareModal from '@/components/compare/CompareModal.vue'
 import ReviewReport from '@/components/review/ReviewReport.vue'
 import TranslatePanel from '@/components/translate/TranslatePanel.vue'
-import { useTranslateStore } from '@/stores/translate'
+
+import { useContractSelection } from '@/composables/useContractSelection'
+import { useReviewFlow } from '@/composables/useReviewFlow'
+import { useCompareFlow } from '@/composables/useCompareFlow'
 
 const message = useMessage()
-const dialog = useDialog()
 const route = useRoute()
 const router = useRouter()
 const contractStore = useContractStore()
 const reviewStore = useReviewStore()
 const chatStore = useChatStore()
-const translateStore = useTranslateStore()
+
+// 主视图状态：'review' | 'translate'
+const mainView = ref<'review' | 'translate'>('review')
+const showContractPanel = ref(true)
+
+// Composable 实例
+const contractSel = useContractSelection()
+const reviewFlow = useReviewFlow()
+const compareModalRef = ref<InstanceType<typeof CompareModal> | null>(null)
+const compareFlow = useCompareFlow(compareModalRef)
 
 const showUpload = ref(false)
-const showContractPanel = ref(true)
-const showReport = ref(false)
-const reviewCreating = ref(false)
-const showCompareUpload = ref(false)
-const showCompare = ref(false)
-const activeContractId = ref<number | null>(null)
-const activeReviewId = ref<number | null>(null)
-const compareModalRef = ref<InstanceType<typeof CompareModal> | null>(null)
-const activeTab = ref<'review' | 'translate' | 'compare'>('review')
 
 onMounted(async () => {
   await contractStore.fetchContracts()
-  // 从起草页"保存并送审"跳转 → 自动触发审核
   const reviewContractId = route.query.review_contract
   if (reviewContractId) {
     const id = Number(reviewContractId)
     if (!isNaN(id)) {
       router.replace({ path: '/', query: {} })
-      await onSelectContract(id, true)
+      await contractSel.onSelectContract(id, true)
     }
   }
 })
 
-// 发起审核（提取为独立函数，供对话框和自动触发复用）
-async function startReview(contractId: number) {
-  reviewCreating.value = true
-  try {
-    const review = await reviewStore.createReview(contractId)
-    const result = review || reviewStore.currentReview
-    if (!result) {
-      message.error('审核创建失败，请重试')
-      return
-    }
-    const reviewId = result.id
-    activeReviewId.value = reviewId
-    // 立即更新侧边栏审核状态标签
-    contractStore.markReviewed(contractId)
-    if (result.findings) {
-      showReport.value = true
-      chatStore.clearMessages()
-      chatStore.addMessage({
-        review_id: reviewId,
-        role: 'assistant',
-        content: `📋 **审核完成** — 综合评分 **${result.overall_score ?? '—'}** 分（${result.risk_level === 'high' ? '高风险' : result.risk_level === 'medium' ? '中风险' : '低风险'}）\n\n${result.summary || ''}\n\n点击右上角报告图标可查看逐条分析，也可以直接在下方输入框提问。`,
-      })
-    } else if (result.status === 'error') {
-      message.error(result.summary || '审核失败，请重试')
-    } else {
-      message.warning('审核正在处理中，请稍候...')
-      reviewStore.streamReview(reviewId)
-    }
-  } catch (e: any) {
-    message.error(e.message || '审核创建失败')
-  } finally {
-    reviewCreating.value = false
-  }
+function onTranslateClick() {
+  mainView.value = 'translate'
 }
 
-function switchTab(tab: 'review' | 'translate' | 'compare') {
-  activeTab.value = tab
-  // 翻译 Tab 激活时自动折叠合同面板
-  if (tab === 'translate') {
-    showContractPanel.value = false
+function onCompareClick() {
+  if (!contractSel.activeContractId.value) {
+    message.warning('请先选择一份合同')
+    return
   }
-  // 对比 Tab：打开上传弹窗
-  if (tab === 'compare') {
-    if (!activeContractId.value) {
-      message.warning('请先选择一份合同')
-      activeTab.value = 'review'
-      return
-    }
-    showCompareUpload.value = true
-    // 不长期停留在对比 Tab，弹窗关闭后回到审核
-    activeTab.value = 'review'
-  }
-  // 清理翻译状态
-  if (tab !== 'translate') {
-    translateStore.reset()
-  }
+  compareFlow.showCompareUpload.value = true
 }
 
-function onTranslationSaved(childId: number) {
-  message.success('译文已保存')
-  contractStore.fetchContracts()
-}
-
-const onSelectContract = async (id: number, skipConfirm = false) => {
-  // 点击当前合同：不做任何操作，避免打断正在进行的 AI 流式回复
-  if (id === activeContractId.value) return
-
-  activeContractId.value = id
-  showContractPanel.value = true
-  await contractStore.fetchContract(id)
-
-  // 取消正在进行的 SSE 流并清理消息
-  chatStore.clearMessages()
-
-  // 检查是否有已有审核
-  const reviews = await reviewStore.fetchReviews(id)
-  if (reviews.length > 0) {
-    const latest = reviews[0]
-    reviewStore.currentReview = latest
-    activeReviewId.value = latest.id
-    await chatStore.loadHistory(latest.id)
-  } else if (skipConfirm) {
-    // 保存并送审 → 直接审核
-    await startReview(id)
-  } else {
-    // 未审核的合同
-    const isDraft = contractStore.currentContract?.source === 'draft'
-    if (isDraft) {
-      // 起草仅保存 → 询问是否审核
-      activeReviewId.value = null
-      reviewStore.currentReview = null
-      dialog.info({
-        title: '合同尚未审核',
-        content: '这份起草的合同还没有进行 AI 审核，要现在发起审核吗？',
-        positiveText: '开始审核',
-        negativeText: '取消',
-        closable: true,
-        onPositiveClick: () => {
-          startReview(id)
-        },
-      })
-    } else {
-      // 上传的合同 → 直接审核
-      await startReview(id)
-    }
-  }
-}
-
-const onUploadClick = () => {
+function onUploadClick() {
   showUpload.value = true
 }
 
-const onUploaded = async (contract: any) => {
+async function onUploaded(contract: any) {
   showUpload.value = false
   message.success('合同上传成功，正在分析...')
-  await onSelectContract(contract.id)
+  await contractSel.onSelectContract(contract.id)
 }
 
-const onDeleteContract = async (id: number) => {
-  try {
-    await contractStore.deleteContract(id)
-    if (activeContractId.value === id) {
-      activeContractId.value = null
-      activeReviewId.value = null
-      chatStore.clearMessages()
-      reviewStore.currentReview = null
-      showContractPanel.value = false
-    }
-    message.success('合同已删除')
-  } catch (e: any) {
-    message.error(e.message || '删除失败')
-  }
-}
-
-const onSendMessage = async (content: string) => {
-  if (activeReviewId.value == null) return
-  await chatStore.sendMessage(content, activeReviewId.value)
-}
-
-const onClauseClick = (clauseId: string, clauseText: string) => {
+function onClauseClick(clauseId: string, clauseText: string) {
   chatStore.setAnchor(clauseId, clauseText)
 }
 
-const onCompareClick = () => {
-  showCompareUpload.value = true
-}
-
-const onCompareConfirm = (file: File, perspective: string) => {
-  showCompareUpload.value = false
-  showCompare.value = true
-  // CompareModal will open and start the SSE connection
-  setTimeout(() => {
-    compareModalRef.value?.startCompare(file, perspective)
-  }, 100)
+function onTranslationSaved(_childId: number) {
+  message.success('译文已保存')
+  contractStore.fetchContracts()
 }
 </script>
 
@@ -325,33 +191,6 @@ const onCompareConfirm = (file: File, perspective: string) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.tab-bar {
-  display: flex;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fff;
-  padding: 0 16px;
-  flex-shrink: 0;
-}
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #999;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-.tab:hover {
-  color: #666;
-}
-.tab.active {
-  color: #4C6EF5;
-  border-bottom-color: #4C6EF5;
-  font-weight: 500;
 }
 
 .main-area {
@@ -385,5 +224,4 @@ const onCompareConfirm = (file: File, perspective: string) => {
   color: #999;
   font-size: 14px;
 }
-
 </style>

@@ -147,13 +147,13 @@ async def draft_generate(body: DraftGenerateRequest):
                 full_content += token
                 yield f"data: {_sse_encode({'event': 'token', 'data': token})}\n\n"
 
-            yield f"data: {_sse_encode({'event': 'done', 'data': json.dumps({'content': full_content, 'token_usage': len(full_content) // 2}, ensure_ascii=False)})}\n\n"
+            yield f"data: {_sse_encode({'event': 'done', 'data': {'content': full_content, 'token_usage': len(full_content) // 2}})}\n\n"
             logger.info("Draft generate 完成 | 长度=%d chars", len(full_content))
         except Exception as e:
             logger.error("Draft generate 异常 | %s: %s", type(e).__name__, e)
             yield f"data: {_sse_encode({'event': 'error', 'data': {'message': str(e)}})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 @router.post("/chat")
@@ -205,13 +205,13 @@ async def draft_chat(body: DraftChatRequest):
                 full_content += token
                 yield f"data: {_sse_encode({'event': 'token', 'data': token})}\n\n"
 
-            yield f"data: {_sse_encode({'event': 'done', 'data': json.dumps({'revised_clause': full_content, 'note': '条款已更新'}, ensure_ascii=False)})}\n\n"
+            yield f"data: {_sse_encode({'event': 'done', 'data': {'revised_clause': full_content, 'note': '条款已更新'}})}\n\n"
             logger.info("Draft chat 完成 | 长度=%d chars", len(full_content))
         except Exception as e:
             logger.error("Draft chat 异常 | %s: %s", type(e).__name__, e)
             yield f"data: {_sse_encode({'event': 'error', 'data': {'message': str(e)}})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream; charset=utf-8")
 
 
 # ═══════════════════════════════════════════════════════════
