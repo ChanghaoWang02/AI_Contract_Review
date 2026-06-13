@@ -38,13 +38,16 @@ export function useContractSelection() {
     } else if (skipConfirm) {
       await startReview(id)
     } else {
-      const isDraft = contractStore.currentContract?.source === 'draft'
-      if (isDraft) {
+      const needsExplicitReview =
+        contractStore.currentContract?.source === 'draft' ||
+        contractStore.currentContract?.source === 'translated'
+      if (needsExplicitReview) {
+        const label = contractStore.currentContract?.source === 'translated' ? '翻译' : '起草'
         activeReviewId.value = null
         reviewStore.currentReview = null
         dialog.info({
           title: '合同尚未审核',
-          content: '这份起草的合同还没有进行 AI 审核，要现在发起审核吗？',
+          content: `这份${label}的合同还没有进行 AI 审核，要现在发起审核吗？`,
           positiveText: '开始审核',
           negativeText: '取消',
           closable: true,

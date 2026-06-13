@@ -41,8 +41,14 @@
           <n-button size="small" secondary @click="saveResult">
             <n-icon><save-outline /></n-icon> 保存译文
           </n-button>
-          <n-button size="small" secondary @click="downloadTXT">
-            <n-icon><download-outline /></n-icon> 下载 TXT
+          <n-select
+            v-model:value="exportFormat"
+            :options="exportFormatOptions"
+            size="small"
+            style="width: 90px"
+          />
+          <n-button size="small" secondary @click="downloadTranslation" :loading="exporting">
+            <n-icon><download-outline /></n-icon> 下载
           </n-button>
           <n-button size="small" @click="startTranslate">
             <n-icon><refresh-outline /></n-icon> 重新翻译
@@ -128,6 +134,14 @@ const { isStreaming, abort, translateContract, retranslateClause, saveTranslatio
   useTranslate()
 
 const retranslatingIndex = ref<number | null>(null)
+const exporting = ref(false)
+const exportFormat = ref<'pdf' | 'docx' | 'txt'>('pdf')
+
+const exportFormatOptions = [
+  { label: 'PDF', value: 'pdf' },
+  { label: 'DOCX', value: 'docx' },
+  { label: 'TXT', value: 'txt' },
+]
 
 const LANG_NAMES: Record<string, string> = {
   zh: '中文', en: '英文', ja: '日文', ko: '韩文',
@@ -274,17 +288,72 @@ async function saveResult() {
   }
 }
 
-function downloadTXT() {
+function downloadTranslation() {
+  exporting.value = true
+
   const text = store.clauses.map((c) => c.translated).join('\n\n')
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `translated_${selectedTargetLang.value}.txt`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const fmt = exportFormat.value
+
+  // TXT 格式直接客户端下载，无需请求后端
+  if (fmt === 'txt') {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `translated_${selectedTargetLang.value}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    exporting.value = false
+    return
+  }
+
+  // PDF / DOCX 通过后端格式转换
+  fetch('/api/translate/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: text,
+      format: fmt,
+      filename: `译文_${selectedTargetLang.value}`,
+    }),
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error('导出失败')
+      const disposition = res.headers.get('Content-Disposition')
+      let filename = `译文.${fmt}`
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/)
+        if (match) filename = decodeURIComponent(match[1])
+      }
+      return res.blob().then((blob) => ({ blob, filename }))
+    })
+    .then(({ blob, filename }) => {
+      const downloadUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(downloadUrl)
+    })
+    .catch(() => {
+      // 降级为 TXT
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `translated_${selectedTargetLang.value}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    })
+    .finally(() => {
+      exporting.value = false
+    })
 }
 
 // 组件卸载时取消 SSE

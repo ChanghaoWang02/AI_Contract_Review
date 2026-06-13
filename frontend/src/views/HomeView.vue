@@ -5,9 +5,11 @@
       :contracts="contractStore.contracts"
       :active-id="contractSel.activeContractId.value"
       :loading="contractStore.loading"
+      :disabled="reviewStore.isStreaming"
       @select="contractSel.onSelectContract"
       @upload="onUploadClick"
       @delete="contractSel.onDeleteContract"
+      @review="onReviewClick"
       @translate="onTranslateClick"
       @compare="onCompareClick"
     />
@@ -56,7 +58,7 @@
     />
 
     <!-- 审核中遮罩 -->
-    <n-modal v-model:show="reviewFlow.reviewCreating.value" :mask-closable="false" :closable="false" style="width: 420px">
+    <n-modal v-model:show="reviewStore.isStreaming" :mask-closable="false" :closable="false" style="width: 420px">
       <div class="loading-modal">
         <n-spin size="large" />
         <h3>AI 正在审核合同...</h3>
@@ -146,6 +148,14 @@ onMounted(async () => {
   }
 })
 
+function onReviewClick() {
+  mainView.value = 'review'
+  const id = contractSel.activeContractId.value
+  if (id) {
+    contractSel.onSelectContract(id)
+  }
+}
+
 function onTranslateClick() {
   mainView.value = 'translate'
 }
@@ -164,6 +174,7 @@ function onUploadClick() {
 
 async function onUploaded(contract: any) {
   showUpload.value = false
+  mainView.value = 'review'
   message.success('合同上传成功，正在分析...')
   await contractSel.onSelectContract(contract.id)
 }

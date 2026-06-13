@@ -9,6 +9,7 @@
       type="primary"
       block
       :loading="loading"
+      :disabled="disabled"
       @click="$emit('upload')"
       class="upload-btn"
     >
@@ -28,9 +29,9 @@
           v-for="c in sortedContracts"
           :key="c.id"
           class="contract-item"
-          :class="{ active: c.id === activeId, translated: c.source === 'translated' }"
+          :class="{ active: c.id === activeId, translated: c.source === 'translated', disabled }"
           :style="c.source === 'translated' ? { paddingLeft: '28px' } : {}"
-          @click="$emit('select', c.id)"
+          @click="!disabled && $emit('select', c.id)"
         >
           <div class="contract-name">
             <n-tag
@@ -95,14 +96,27 @@
 
     <div class="sidebar-footer">
       <div class="nav-section" style="margin-bottom: 8px">
-        <router-link to="/draft" class="nav-link draft-link">
+        <div
+          class="nav-link"
+          :class="{ disabled }"
+          @click="!disabled && $emit('review')"
+        >
+          <n-icon><document-text-outline /></n-icon> 合同审核
+        </div>
+      </div>
+      <div class="nav-section" style="margin-bottom: 8px">
+        <router-link v-if="!disabled" to="/draft" class="nav-link">
           <n-icon><create-outline /></n-icon> 起草合同
         </router-link>
+        <div v-else class="nav-link disabled">
+          <n-icon><create-outline /></n-icon> 起草合同
+        </div>
       </div>
       <div class="nav-section" style="margin-bottom: 8px">
         <div
           class="nav-link"
-          @click="$emit('translate')"
+          :class="{ disabled }"
+          @click="!disabled && $emit('translate')"
         >
           <n-icon><language-outline /></n-icon> 合同翻译
         </div>
@@ -117,7 +131,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NButton, NIcon, NScrollbar, NTag } from 'naive-ui'
-import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline, LanguageOutline } from '@vicons/ionicons5'
+import { AddOutline, TrashOutline, SettingsOutline, DownloadOutline, CreateOutline, LanguageOutline, DocumentTextOutline } from '@vicons/ionicons5'
 import { useExportPDF } from '@/composables/useExportPDF'
 import { useReviewStore } from '@/stores/review'
 import type { Contract } from '@/stores/contract'
@@ -126,12 +140,14 @@ const props = defineProps<{
   contracts: Contract[]
   activeId: number | null
   loading: boolean
+  disabled: boolean
 }>()
 
 defineEmits<{
   select: [id: number]
   upload: []
   delete: [id: number]
+  review: []
   translate: []
 }>()
 
@@ -234,6 +250,11 @@ function formatDate(dateStr: string): string {
   background: #e8ebff;
   border: 1px solid #c4ccff;
 }
+.contract-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 .contract-name {
   font-size: 14px;
@@ -314,13 +335,6 @@ function formatDate(dateStr: string): string {
 }
 .nav-link:hover {
   background: #f5f5f5;
-}
-.draft-link {
-  color: #4C6EF5;
-  font-weight: 500;
-}
-.draft-link:hover {
-  background: #e8ebff;
 }
 .nav-link.disabled {
   color: #ccc;

@@ -1,10 +1,12 @@
-"""合同翻译 API — SSE 流式翻译 + 文本翻译 + 保存"""
+"""合同翻译 API — SSE 流式翻译 + 文本翻译 + 保存 + 导出"""
 
+import io
 import json
 import re
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -236,3 +238,141 @@ async def translate_save(body: TranslateSaveRequest, db: Session = Depends(get_d
         "clause_count": clause_count,
         "filename": child.original_filename,
     }
+
+
+def _build_translate_pdf(content: str, filename: str) -> bytes:
+    """将译文生成为 PDF 文件（字节）"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from app.core.pdf_renderer import FONT_NAME
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=25*2.83, rightMargin=25*2.83,
+                            topMargin=20*2.83, bottomMargin=20*2.83)
+
+    styles = {
+        "title": ParagraphStyle("TTitle", fontName=FONT_NAME, fontSize=18,
+                                leading=26, alignment=TA_CENTER, spaceAfter=20),
+        "body": ParagraphStyle("TBody", fontName=FONT_NAME, fontSize=10,
+                               leading=18, spaceAfter=10),
+    }
+
+    story = []
+    # 标题
+    clean = filename
+    for ext in (".txt", ".pdf", ".docx"):
+        if clean.lower().endswith(ext):
+            clean = clean.rsplit(".", 1)[0]
+            break
+    story.append(Paragraph(f"合同译文：{clean}", styles["title"]))
+    story.append(Spacer(1, 12))
+
+    # 正文：按段落拆分
+    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+    for para in paragraphs:
+        # 将换行转为 <br/>
+        text = para.replace('\n', '<br/>')
+        story.append(Paragraph(text, styles["body"]))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_translate_docx(content: str) -> bytes:
+    """将译文生成为 DOCX 文件（字节）"""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+
+    # 页面边距
+    for section in doc.sections:
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+
+    # 正文
+    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+    for i, para in enumerate(paragraphs):
+        p = doc.add_paragraph()
+        p.style.font.size = Pt(11)
+        p.style.font.name = 'Microsoft YaHei'
+        # 拆分内部换行
+        lines = para.split('\n')
+        for j, line in enumerate(lines):
+            if j > 0:
+                p.add_run('\n').font.size = Pt(11)
+            run = p.add_run(line)
+            run.font.size = Pt(11)
+            run.font.name = 'Microsoft YaHei'
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+class TranslateExportRequest(BaseModel):
+    """译文导出请求"""
+    content: str
+    format: str = "pdf"   # pdf / docx / txt
+    filename: str = "译文"
+
+
+@router.post("/export")
+async def export_translation(body: TranslateExportRequest):
+    """导出译文为指定格式（PDF / DOCX / TXT）
+
+    接受前端传来的译文内容，直接转换格式后返回文件。
+    无需依赖数据库——用户可能在保存前就导出。
+    """
+    if not body.content:
+        raise HTTPException(400, "译文内容为空，无法导出。")
+
+    if body.format not in ("pdf", "docx", "txt"):
+        raise HTTPException(400, f"不支持的导出格式：{body.format}，支持 pdf/docx/txt")
+
+    clean_name = body.filename
+    for ext in (".txt", ".pdf", ".docx"):
+        if clean_name.lower().endswith(ext):
+            clean_name = clean_name.rsplit(".", 1)[0]
+            break
+
+    if body.format == "txt":
+        content_bytes = body.content.encode("utf-8")
+        media_type = "text/plain; charset=utf-8"
+        return Response(
+            content=content_bytes,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{clean_name}.txt"'},
+        )
+
+    if body.format == "pdf":
+        try:
+            pdf_bytes = _build_translate_pdf(body.content, clean_name)
+        except Exception as e:
+            logger.error("PDF 生成失败: %s", e, exc_info=True)
+            raise HTTPException(500, f"PDF 生成失败：{e}")
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{clean_name}.pdf"'},
+        )
+
+    if body.format == "docx":
+        try:
+            docx_bytes = _build_translate_docx(body.content)
+        except Exception as e:
+            logger.error("DOCX 生成失败: %s", e, exc_info=True)
+            raise HTTPException(500, f"DOCX 生成失败：{e}")
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{clean_name}.docx"'},
+        )
